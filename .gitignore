@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Large binary photo working files (raw camera / Photoshop) — not source
+*.ARW
+*.psd
+*.xmp
+
+# OS / editor
+Thumbs.db
+.DS_Store
