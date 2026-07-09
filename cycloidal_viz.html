@@ -1,6 +1,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cycloidal Mesh — Modification Studio</title>
+<title>Cycloidal Shape Designer</title>
 <style>
   :root {
     color-scheme: dark;
@@ -9,80 +9,104 @@
     --panel-2: #1b1e24;
     --line:    #2a2e35;
     --line-2:  #363b44;
-    --ink:     #e8eaed;
-    --ink-2:   #9aa0a8;
-    --ink-3:   #656b73;
-    --blue:    #3987e5;   /* current design */
+    --ink:     #eceef1;
+    --ink-2:   #a2a8b0;
+    --ink-3:   #6b7178;
+    --blue:    #3987e5;   /* shipped design */
     --orange:  #e0864a;   /* uniform offset */
-    --green:   #22b892;   /* GA optimum (hero) */
+    --green:   #22b892;   /* your design (hero) */
     --hot:     #fab219;   /* load / contact */
     --danger:  #e0554e;
     --steel:   #47566a;   /* housing / pins */
     --mono: ui-monospace, "Cascadia Code", "Cascadia Mono", "SF Mono", Consolas, "Liberation Mono", monospace;
-    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Microsoft YaHei", sans-serif;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--ink);
-    font-family: var(--sans); line-height: 1.5;
+    font-family: var(--sans); line-height: 1.55; font-size: 16px;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 30px 22px 72px; }
 
   /* ---- header ---- */
-  header { border-bottom: 1px solid var(--line); padding-bottom: 18px; margin-bottom: 22px; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 20px; margin-bottom: 22px; }
+  .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
   .eyebrow {
-    font-family: var(--mono); font-size: 11px; letter-spacing: .28em;
-    text-transform: uppercase; color: var(--green); margin: 0 0 10px;
+    font-family: var(--mono); font-size: 13px; letter-spacing: .26em;
+    text-transform: uppercase; color: var(--green); margin: 0 0 12px;
   }
-  h1 { font-size: clamp(26px, 4.4vw, 40px); line-height: 1.05; margin: 0 0 8px; font-weight: 620; letter-spacing: -.01em; }
+  h1 { font-size: clamp(30px, 4.6vw, 46px); line-height: 1.05; margin: 0 0 12px; font-weight: 640; letter-spacing: -.015em; text-wrap: balance; }
   h1 .thin { color: var(--ink-3); font-weight: 300; }
-  .lede { color: var(--ink-2); max-width: 62ch; margin: 0; font-size: 15px; }
-  .spec { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin-top: 12px; }
-  .spec b { color: var(--ink-2); font-weight: 500; }
+  .lede { color: var(--ink-2); max-width: 68ch; margin: 0; font-size: 17px; }
+  /* language toggle */
+  .lang { display: inline-flex; border: 1px solid var(--line-2); border-radius: 7px; overflow: hidden; flex: none; }
+  .lang button {
+    font-family: var(--mono); font-size: 13px; padding: 7px 13px; cursor: pointer;
+    background: transparent; border: 0; color: var(--ink-3); transition: color .15s, background .15s;
+  }
+  .lang button.on { color: var(--bg); background: var(--green); }
+  .lang button:not(.on):hover { color: var(--ink); }
+  .lang button:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
+
+  /* ---- geometry / spec bar ---- */
+  .setup { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+  .setup h2, .panel h2 {
+    font-family: var(--mono); font-size: 13px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-3); margin: 0 0 14px; font-weight: 500; display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  }
+  .panel h2 .aux { color: var(--ink-3); letter-spacing: 0; text-transform: none; font-size: 12.5px; font-weight: 400; }
+  .fields { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+  @media (max-width: 720px){ .fields { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 420px){ .fields { grid-template-columns: repeat(2, 1fr); } }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); }
+  .field .unit { color: var(--ink-3); }
+  .field input {
+    font-family: var(--mono); font-size: 15px; color: var(--ink); background: var(--panel-2);
+    border: 1px solid var(--line-2); border-radius: 6px; padding: 8px 10px; width: 100%;
+    font-variant-numeric: tabular-nums;
+  }
+  .field input:focus-visible { outline: 2px solid var(--green); outline-offset: 0; border-color: var(--green); }
+  .warnbar { display: none; margin-top: 12px; font-family: var(--mono); font-size: 13px; color: var(--hot);
+    border: 1px solid var(--hot); background: rgba(250,178,25,.10); border-radius: 6px; padding: 8px 11px; }
+  .warnbar.on { display: block; }
 
   /* ---- layout ---- */
-  .grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; }
-  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
-  .panel {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-    padding: 16px; position: relative;
-  }
-  .panel h2 {
-    font-family: var(--mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
-    color: var(--ink-3); margin: 0 0 12px; font-weight: 500; display: flex; justify-content: space-between; align-items: baseline;
-  }
-  .panel h2 .aux { color: var(--ink-3); letter-spacing: 0; text-transform: none; font-size: 11px; }
+  .grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 16px; }
+  @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; position: relative; }
+  .full { grid-column: 1 / -1; }
 
   canvas { display: block; width: 100%; }
   #stage { aspect-ratio: 1 / 1; }
   #tooth { aspect-ratio: 16 / 9; }
   #clr   { aspect-ratio: 21 / 8; }
 
-  /* ---- mesh overlay controls ---- */
+  /* ---- mesh overlay ---- */
   .stagewrap { position: relative; }
   .jam {
-    position: absolute; top: 12px; left: 12px; font-family: var(--mono); font-size: 11px;
-    letter-spacing: .12em; color: var(--danger); border: 1px solid var(--danger);
-    background: rgba(224,85,78,.12); padding: 4px 8px; border-radius: 5px; display: none;
+    position: absolute; top: 12px; left: 12px; right: 12px; font-family: var(--mono); font-size: 13px;
+    letter-spacing: .06em; color: var(--danger); border: 1px solid var(--danger);
+    background: rgba(224,85,78,.14); padding: 6px 10px; border-radius: 6px; display: none;
   }
   .jam.on { display: block; }
-  .transport { display: flex; align-items: center; gap: 14px; margin-top: 12px; }
+  .transport { display: flex; align-items: center; gap: 16px; margin-top: 14px; }
   button.play {
-    font-family: var(--mono); font-size: 12px; color: var(--ink); background: var(--panel-2);
-    border: 1px solid var(--line-2); border-radius: 6px; padding: 7px 14px; cursor: pointer;
-    min-width: 82px; transition: border-color .15s, background .15s;
+    font-family: var(--mono); font-size: 14px; color: var(--ink); background: var(--panel-2);
+    border: 1px solid var(--line-2); border-radius: 6px; padding: 8px 16px; cursor: pointer;
+    min-width: 96px; transition: border-color .15s;
   }
   button.play:hover { border-color: var(--green); }
   button.play:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
-  .transport label { font-family: var(--mono); font-size: 11px; color: var(--ink-3); display: flex; align-items: center; gap: 8px; flex: 1; }
+  .transport label { font-family: var(--mono); font-size: 13px; color: var(--ink-3); display: flex; align-items: center; gap: 10px; flex: 1; }
 
-  /* ---- sliders ---- */
-  .presets { display: flex; gap: 6px; margin-bottom: 18px; }
+  /* ---- presets + sliders ---- */
+  .presets { display: flex; gap: 7px; margin-bottom: 20px; }
   .presets button {
-    flex: 1; font-family: var(--mono); font-size: 11px; padding: 8px 4px; cursor: pointer;
+    flex: 1; font-family: var(--mono); font-size: 13px; padding: 9px 4px; cursor: pointer;
     background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; color: var(--ink-2);
-    transition: border-color .15s, color .15s; letter-spacing: .02em;
+    transition: border-color .15s, color .15s;
   }
   .presets button:hover { color: var(--ink); }
   .presets button.active { color: var(--ink); border-color: currentColor; }
@@ -91,142 +115,195 @@
   .presets button[data-k="ga"].active { color: var(--green); }
   .presets button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 
-  .ctl { margin-bottom: 15px; }
-  .ctl .row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
-  .ctl .name { font-family: var(--mono); font-size: 12px; color: var(--ink); }
-  .ctl .name .desc { color: var(--ink-3); font-size: 11px; margin-left: 7px; }
-  .ctl .val { font-family: var(--mono); font-size: 13px; color: var(--green); font-variant-numeric: tabular-nums; }
-  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 3px; background: var(--line-2); border-radius: 2px; outline: none; margin: 8px 0; }
-  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%; background: var(--ink); border: 2px solid var(--bg); cursor: pointer; box-shadow: 0 0 0 1px var(--line-2); }
-  input[type=range]::-moz-range-thumb { width: 15px; height: 15px; border-radius: 50%; background: var(--ink); border: 2px solid var(--bg); cursor: pointer; }
+  .ctl { margin-bottom: 16px; }
+  .ctl .row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; gap: 10px; }
+  .ctl .name { font-family: var(--mono); font-size: 14px; color: var(--ink); }
+  .ctl .name .desc { color: var(--ink-3); font-size: 12.5px; margin-left: 8px; }
+  .ctl .val { font-family: var(--mono); font-size: 15px; color: var(--green); font-variant-numeric: tabular-nums; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 3px; background: var(--line-2); border-radius: 2px; outline: none; margin: 9px 0; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--ink); border: 2px solid var(--bg); cursor: pointer; box-shadow: 0 0 0 1px var(--line-2); }
+  input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--ink); border: 2px solid var(--bg); cursor: pointer; }
   input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--green); }
 
   /* ---- metrics ---- */
-  .metrics { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 14px; }
-  .metric { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+  .metrics { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 16px; }
+  .metric { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
   .metric:last-child { border-bottom: 0; }
-  .metric .k { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
-  .metric .k small { color: var(--ink-3); display: block; font-size: 10.5px; letter-spacing: .02em; }
-  .metric .v { font-family: var(--mono); font-size: 16px; color: var(--ink); font-variant-numeric: tabular-nums; text-align: right; }
-  .metric .v u { text-decoration: none; color: var(--ink-3); font-size: 11px; margin-left: 3px; }
+  .metric .k { font-family: var(--mono); font-size: 14px; color: var(--ink-2); }
+  .metric .k small { color: var(--ink-3); display: block; font-size: 12px; margin-top: 1px; }
+  .metric .v { font-family: var(--mono); font-size: 20px; color: var(--ink); font-variant-numeric: tabular-nums; text-align: right; }
+  .metric .v u { text-decoration: none; color: var(--ink-3); font-size: 12.5px; margin-left: 4px; }
   .metric .v.warn { color: var(--hot); }
   .metric .v.bad  { color: var(--danger); }
-  .metric .delta { font-size: 11px; margin-left: 6px; }
+  .metric .delta { font-size: 12.5px; margin-left: 7px; }
   .delta.up { color: var(--green); } .delta.down { color: var(--danger); }
 
-  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-family: var(--mono); font-size: 11px; color: var(--ink-2); margin-top: 10px; }
-  .legend span { display: inline-flex; align-items: center; gap: 6px; }
-  .swatch { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
-  .full { grid-column: 1 / -1; }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; font-family: var(--mono); font-size: 13px; color: var(--ink-2); margin-top: 12px; }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .swatch { width: 20px; height: 3px; border-radius: 2px; display: inline-block; }
 
-  footer { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 12.5px; }
+  /* ---- export ---- */
+  .export .eqrow { margin-bottom: 14px; }
+  .export .eqlabel { font-family: var(--mono); font-size: 13px; color: var(--ink-2); margin-bottom: 6px; display: block; }
+  .export pre {
+    font-family: var(--mono); font-size: 12.5px; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 7px; padding: 12px 14px; margin: 0;
+    overflow-x: auto; white-space: pre; line-height: 1.5;
+  }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 4px 0 16px; }
+  .actions button {
+    font-family: var(--mono); font-size: 13.5px; color: var(--ink); background: var(--panel-2);
+    border: 1px solid var(--line-2); border-radius: 7px; padding: 9px 16px; cursor: pointer;
+    transition: border-color .15s, color .15s;
+  }
+  .actions button:hover { border-color: var(--green); color: var(--green); }
+  .actions button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+  .export .how { font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); line-height: 1.7; }
+  .export .how b { color: var(--ink-2); font-weight: 500; }
+
+  /* CJK doesn't benefit from the wide tracking meant for uppercase Latin */
+  :root:lang(zh) .eyebrow { letter-spacing: .1em; }
+  :root:lang(zh) .setup h2, :root:lang(zh) .panel h2 { letter-spacing: .06em; }
+
+  footer { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 14px; }
+  footer b { color: var(--ink-2); font-weight: 500; }
   footer code { font-family: var(--mono); color: var(--ink-2); }
-  .note { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-top: 8px; }
-
-  @media (prefers-reduced-motion: reduce) { button.play { } }
+  .note { font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); margin-top: 10px; }
 </style>
 
 <div class="wrap">
   <header>
-    <p class="eyebrow">Cycloidal drive · tooth-profile modification</p>
-    <h1>Modification Studio <span class="thin">— smooth, stiff, within tolerance</span></h1>
-    <p class="lede">An 18-lobe cycloidal disk running against 19 pins, computed live. Drag the three
-      modification amounts and watch where the mesh goes tight, how load spreads across the teeth, and
-      whether the design still clears a worst-case tolerance stack.</p>
-    <p class="spec">Rb <b>34</b> · Rr <b>2.5</b> · E <b>1.5</b> · N <b>18</b> pins <b>19</b> · rated <b>30 N·m</b> · tolerance stack <b>±15 µm</b></p>
+    <div class="topbar">
+      <div>
+        <p class="eyebrow" data-i18n="eyebrow">Cycloidal drive · profile designer</p>
+        <h1><span data-i18n="title_main">Cycloidal Shape Designer</span> <span class="thin" data-i18n="title_thin">— tune it, mesh it, export to SolidWorks</span></h1>
+      </div>
+      <div class="lang" role="group" aria-label="language">
+        <button id="lang-en" class="on">EN</button>
+        <button id="lang-zh">中文</button>
+      </div>
+    </div>
+    <p class="lede" data-i18n="lede">Set your drive's geometry, shape the tooth with three modification terms, and read backlash, stiffness and tolerance margin live. Copy the SolidWorks equation when it's right.</p>
   </header>
 
+  <!-- geometry & spec -->
+  <div class="setup">
+    <h2><span data-i18n="setup_h">Geometry &amp; spec</span></h2>
+    <div class="fields">
+      <div class="field"><label><span data-i18n="lbl_Rb">pin-circle Rb</span> <span class="unit">mm</span></label><input id="g-Rb" type="number" value="34" min="15" max="120" step="0.5"></div>
+      <div class="field"><label><span data-i18n="lbl_Rr">pin radius Rr</span> <span class="unit">mm</span></label><input id="g-Rr" type="number" value="2.5" min="0.5" max="12" step="0.1"></div>
+      <div class="field"><label><span data-i18n="lbl_E">eccentricity E</span> <span class="unit">mm</span></label><input id="g-E" type="number" value="1.5" min="0.2" max="6" step="0.1"></div>
+      <div class="field"><label><span data-i18n="lbl_N">lobes N</span></label><input id="g-N" type="number" value="18" min="6" max="40" step="1"></div>
+      <div class="field"><label><span data-i18n="lbl_tol">tolerance</span> <span class="unit">µm</span></label><input id="g-tol" type="number" value="15" min="1" max="80" step="1"></div>
+      <div class="field"><label><span data-i18n="lbl_T">rated torque</span> <span class="unit">N·m</span></label><input id="g-T" type="number" value="30" min="1" max="500" step="1"></div>
+    </div>
+    <div class="warnbar" id="warn" data-i18n="warn">Geometry undercuts — the unmodified tooth can't mesh with all pins. Reduce E or increase Rb.</div>
+  </div>
+
   <div class="grid">
-    <!-- LEFT: mesh -->
+    <!-- mesh -->
     <div class="panel">
-      <h2>Mesh <span class="aux" id="ratio">ratio 18:1 · output frame</span></h2>
+      <h2><span data-i18n="mesh_h">Mesh</span> <span class="aux" id="ratio"></span></h2>
       <div class="stagewrap">
         <canvas id="stage"></canvas>
-        <div class="jam" id="jam">TOLERANCE JAM — disk locks under ±15 µm stack</div>
+        <div class="jam" id="jam" data-i18n="jam">Tolerance jam — locks under the tolerance stack</div>
       </div>
       <div class="transport">
-        <button class="play" id="play" aria-pressed="true">❚❚ pause</button>
-        <label>speed <input type="range" id="speed" min="0" max="100" value="45" aria-label="animation speed"></label>
+        <button class="play" id="play" aria-pressed="true"></button>
+        <label><span data-i18n="speed">speed</span> <input type="range" id="speed" min="0" max="100" value="45" aria-label="animation speed"></label>
       </div>
       <div class="legend">
-        <span><i class="swatch" style="background:var(--steel)"></i>pins / housing</span>
-        <span><i class="swatch" style="background:var(--green)"></i>disk (active design)</span>
-        <span><i class="swatch" style="background:var(--hot)"></i>tooth under load</span>
+        <span><i class="swatch" style="background:var(--steel)"></i><span data-i18n="lg_pins">pins / housing</span></span>
+        <span><i class="swatch" style="background:var(--green)"></i><span data-i18n="lg_disk">disk (your design)</span></span>
+        <span><i class="swatch" style="background:var(--hot)"></i><span data-i18n="lg_load">tooth under load</span></span>
       </div>
     </div>
 
-    <!-- RIGHT: controls + metrics -->
+    <!-- modification + metrics -->
     <div class="panel">
-      <h2>Design <span class="aux">δ(θ)=offset + s1·cos(Nθ) + s2·cos(2Nθ)</span></h2>
+      <h2><span data-i18n="mod_h">Modification</span> <span class="aux">δ(θ)=offset + s1·cos(Nθ) + s2·cos(2Nθ)</span></h2>
       <div class="presets">
-        <button data-k="uniform">uniform −40</button>
-        <button data-k="deep">deep −75</button>
-        <button data-k="ga" class="active">GA optimum</button>
+        <button data-k="uniform"><span data-i18n="preset_uniform">uniform</span> −40</button>
+        <button data-k="deep"><span data-i18n="preset_deep">deep</span> −75</button>
+        <button data-k="ga" class="active" data-i18n="preset_ga">GA optimum</button>
       </div>
 
       <div class="ctl">
-        <div class="row"><span class="name">offset <span class="desc">even removal</span></span><span class="val" id="v-offset"></span></div>
-        <input type="range" id="s-offset" min="-100" max="-15" step="0.1" aria-label="offset micrometres">
+        <div class="row"><span class="name"><span data-i18n="lbl_offset">offset</span> <span class="desc" data-i18n="desc_offset">even removal</span></span><span class="val" id="v-offset"></span></div>
+        <input type="range" id="s-offset" min="-100" max="-15" step="0.1" aria-label="offset">
       </div>
       <div class="ctl">
-        <div class="row"><span class="name">s1 <span class="desc">tip ↔ root bias</span></span><span class="val" id="v-s1"></span></div>
-        <input type="range" id="s-s1" min="-40" max="40" step="0.1" aria-label="s1 micrometres">
+        <div class="row"><span class="name">s1 <span class="desc" data-i18n="desc_s1">tip ↔ root bias</span></span><span class="val" id="v-s1"></span></div>
+        <input type="range" id="s-s1" min="-40" max="40" step="0.1" aria-label="s1">
       </div>
       <div class="ctl">
-        <div class="row"><span class="name">s2 <span class="desc">mid-flank (reverse-bow)</span></span><span class="val" id="v-s2"></span></div>
-        <input type="range" id="s-s2" min="-40" max="40" step="0.1" aria-label="s2 micrometres">
+        <div class="row"><span class="name">s2 <span class="desc" data-i18n="desc_s2">mid-flank (reverse-bow)</span></span><span class="val" id="v-s2"></span></div>
+        <input type="range" id="s-s2" min="-40" max="40" step="0.1" aria-label="s2">
       </div>
 
-      <div class="metrics" id="metrics">
-        <div class="metric"><span class="k">backlash<small>lost motion, worst crank angle</small></span><span class="v" id="m-backlash"></span></div>
-        <div class="metric"><span class="k">stiffness<small>torsional, worst crank angle</small></span><span class="v" id="m-stiff"></span></div>
-        <div class="metric"><span class="k">ripple<small>wind-up variation = smoothness</small></span><span class="v" id="m-ripple"></span></div>
-        <div class="metric"><span class="k">tolerance margin<small>free play left under ±15 µm</small></span><span class="v" id="m-margin"></span></div>
-        <div class="metric"><span class="k">loaded teeth<small>sharing the rated torque</small></span><span class="v" id="m-teeth"></span></div>
+      <div class="metrics">
+        <div class="metric"><span class="k"><span data-i18n="m_backlash">backlash</span><small data-i18n="sub_backlash">lost motion, worst crank angle</small></span><span class="v" id="m-backlash"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_stiff">stiffness</span><small data-i18n="sub_stiff">torsional, worst crank angle</small></span><span class="v" id="m-stiff"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_ripple">ripple</span><small data-i18n="sub_ripple">wind-up variation = smoothness</small></span><span class="v" id="m-ripple"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_margin">tolerance margin</span><small data-i18n="sub_margin">free play left under the stack</small></span><span class="v" id="m-margin"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_teeth">loaded teeth</span><small data-i18n="sub_teeth">sharing the rated torque</small></span><span class="v" id="m-teeth"></span></div>
       </div>
     </div>
 
-    <!-- tooth profile -->
+    <!-- tooth flank -->
     <div class="panel">
-      <h2>Tooth flank <span class="aux" id="exlabel">one tooth · modification ×40</span></h2>
+      <h2><span data-i18n="tooth_h">Tooth flank</span> <span class="aux"><span data-i18n="tooth_aux">one tooth · modification</span> ×40</span></h2>
       <canvas id="tooth"></canvas>
       <div class="legend">
-        <span><i class="swatch" style="background:var(--steel)"></i>unmodified (pure conjugate)</span>
-        <span><i class="swatch" style="background:var(--green)"></i>modified flank</span>
+        <span><i class="swatch" style="background:#8b96a6"></i><span data-i18n="lg_unmod">unmodified (pure conjugate)</span></span>
+        <span><i class="swatch" style="background:var(--green)"></i><span data-i18n="lg_mod">modified flank</span></span>
       </div>
     </div>
 
-    <!-- clearance distribution -->
+    <!-- clearance -->
     <div class="panel">
-      <h2>Clearance across one tooth <span class="aux">normal gap vs mesh phase</span></h2>
+      <h2><span data-i18n="clr_h">Clearance across one tooth</span> <span class="aux" data-i18n="clr_aux">normal gap vs mesh phase</span></h2>
       <canvas id="clr"></canvas>
       <div class="legend">
-        <span><i class="swatch" style="background:var(--blue)"></i>current</span>
-        <span><i class="swatch" style="background:var(--orange)"></i>uniform</span>
-        <span><i class="swatch" style="background:var(--green)"></i>active</span>
-        <span><i class="swatch" style="background:var(--danger)"></i>tolerance budget</span>
+        <span><i class="swatch" style="background:var(--blue)"></i><span data-i18n="lg_shipped">shipped design</span></span>
+        <span><i class="swatch" style="background:var(--orange)"></i><span data-i18n="lg_uniform">uniform</span></span>
+        <span><i class="swatch" style="background:var(--green)"></i><span data-i18n="lg_yours">your design</span></span>
+        <span><i class="swatch" style="background:var(--danger)"></i><span data-i18n="lg_tol">tolerance budget</span></span>
       </div>
+    </div>
+
+    <!-- export -->
+    <div class="panel export full">
+      <h2><span data-i18n="export_h">Export to SolidWorks</span> <span class="aux" data-i18n="export_sub">equation-driven curve · numbers baked in · units mm</span></h2>
+      <div class="eqrow"><span class="eqlabel">X(t)</span><pre id="eq-x"></pre></div>
+      <div class="eqrow"><span class="eqlabel">Y(t)</span><pre id="eq-y"></pre></div>
+      <div class="actions">
+        <button id="copy-x" data-i18n="btn_copyx">Copy X(t)</button>
+        <button id="copy-y" data-i18n="btn_copyy">Copy Y(t)</button>
+        <button id="copy-both" data-i18n="btn_copyboth">Copy both</button>
+        <button id="dl-csv" data-i18n="btn_csv">Download point-cloud CSV</button>
+      </div>
+      <p class="how" data-i18n="how"></p>
     </div>
   </div>
 
   <footer>
-    Reading it: <b>tight at the mid-flank</b> (where the arm is longest) carries load with little lost
-    motion — that buys stiffness and low backlash. <b>Relieved at tip and root</b> leaves room for the
-    tolerance stack and softens entry/exit shock. The GA optimum is that reverse-bow, sitting right at
-    the tolerance edge (margin 0.68′) to keep four teeth loaded.
-    <div class="note">Model: quasi-static, rigid disk, linearised contact (K=50 N/µm per tooth). Trends are
-      faithful; absolute values are order-of-magnitude. Physics verified against the Python reference
-      (<code>CycloidalModAnalysis.py</code>) to every displayed digit. No lubricant film / dynamics.</div>
+    <span data-i18n="footer_read"></span>
+    <div class="note" data-i18n="footer_note"></div>
   </footer>
 </div>
 
 <script>
 "use strict";
-// ============================ physics (verified port of CycloidalModAnalysis.py) ============================
-const Rb=34.0, Rr=2.5, E=1.5, N=18, M=19, Np=19;
-const TOL=0.015, T_RATED=30.0, K_CONTACT=5.0e4, ROT_SIGN=-1.0;
-const PINS=[]; for(let j=0;j<Np;j++) PINS.push([Rb*Math.cos(2*Math.PI*j/Np), Rb*Math.sin(2*Math.PI*j/Np)]);
+// ============================ geometry (editable) ============================
+let Rb=34.0, Rr=2.5, E=1.5, N=18, M=N+1, Np=N+1;
+let TOL=0.015, T_RATED=30.0;
+const K_CONTACT=5.0e4;
+let ROT_SIGN=-1.0, GEOM_WORST=0;
+let PINS=[];
+function rebuildPins(){ PINS=[]; for(let j=0;j<Np;j++) PINS.push([Rb*Math.cos(2*Math.PI*j/Np), Rb*Math.sin(2*Math.PI*j/Np)]); }
 
+// ============================ physics (port of CycloidalModAnalysis.py) ============================
 function profile(offset,s1,s2,nPts,variant){
   variant=variant||'harmonic';
   const X=new Float64Array(nPts),Y=new Float64Array(nPts),TH=new Float64Array(nPts), tp=2*Math.PI/N;
@@ -246,10 +323,11 @@ function profile(offset,s1,s2,nPts,variant){
   }
   return {X,Y,TH};
 }
-function meshState(prof,psi){
+function meshState(prof,psi,rot){
+  if(rot===undefined) rot=ROT_SIGN;
   const {X,Y,TH}=prof, n=X.length;
   const cx=-E*Math.cos(psi), cy=-E*Math.sin(psi);
-  const a=ROT_SIGN*psi/N, co=Math.cos(a), si=Math.sin(a), tp=2*Math.PI/N;
+  const a=rot*psi/N, co=Math.cos(a), si=Math.sin(a), tp=2*Math.PI/N;
   const WX=new Float64Array(n), WY=new Float64Array(n);
   for(let i=0;i<n;i++){ WX[i]=co*X[i]-si*Y[i]+cx; WY[i]=si*X[i]+co*Y[i]+cy; }
   const gaps=[],arms=[],uu=[],cpx=[],cpy=[];
@@ -262,7 +340,7 @@ function meshState(prof,psi){
     arms.push((wx-cx)*nyj-(wy-cy)*nxj);
     uu.push((((TH[bi]%tp)+tp)%tp)/tp); cpx.push(wx); cpy.push(wy);
   }
-  return {gaps,arms,uu,cpx,cpy,cx,cy,rot:a,WX,WY};
+  return {gaps,arms,uu,cpx,cpy,cx,cy,rot:a};
 }
 function playRange(gaps,arms,tol=0){
   let hi=Infinity, lo=-Infinity;
@@ -281,7 +359,8 @@ function windup(gaps,arms){
   let ne=0,k=0; for(let j=0;j<gaps.length;j++) if(F[j]>0){ne++; k+=K_CONTACT*arms[j]**2;}
   return {wu:b-hi,k,ne,F};
 }
-function evaluate(offset,s1,s2,nPts=4000,variant){
+function evaluate(offset,s1,s2,nPts,variant){
+  nPts=nPts||4000;
   const prof=profile(offset,s1,s2,nPts,variant), arcmin=180/Math.PI*60;
   const plays=[],margins=[],ks=[],wus=[],nes=[];
   for(let i=0;i<6;i++){
@@ -294,24 +373,108 @@ function evaluate(offset,s1,s2,nPts=4000,variant){
            ripple:(Math.max(...wus)-Math.min(...wus))*1e6, margin:Math.min(...margins)*arcmin,
            n_eng:Math.min(...nes) };
 }
+// pick rotation sign by conjugacy of the unmodified tooth (mirrors Python self-check);
+// also reports worst residual clearance so we can flag an invalid (undercut) geometry.
+function pickRotSign(){
+  const prof=profile(0,0,0,2000,'harmonic');
+  let bestSign=-1, bestWorst=Infinity;
+  for(const s of [-1,1]){
+    let worst=0;
+    for(const psi of [0,0.3,1.1]){ const ms=meshState(prof,psi,s); for(const g of ms.gaps) worst=Math.max(worst,Math.abs(g)); }
+    if(worst<bestWorst){ bestWorst=worst; bestSign=s; }
+  }
+  GEOM_WORST=bestWorst; return bestSign;
+}
 
-// ============================ presets & state ============================
-const PRESETS = {
-  uniform: { offset:-0.040,  s1:0,       s2:0,       label:'uniform −40' },
-  deep:    { offset:-0.075,  s1:0,       s2:0,       label:'deep −75' },
-  ga:      { offset:-0.0254, s1:-0.0034, s2:-0.0081, label:'GA optimum' },
+// ============================ i18n ============================
+const TXT = {
+  eyebrow:      { en:'Cycloidal drive · profile designer', zh:'摆线针轮 · 齿廓设计器' },
+  title_main:   { en:'Cycloidal Shape Designer', zh:'摆线齿廓设计器' },
+  title_thin:   { en:'— tune it, mesh it, export to SolidWorks', zh:'— 调形、啮合、导出 SolidWorks' },
+  lede:         { en:"Set your drive's geometry, shape the tooth with three modification terms, and read backlash, stiffness and tolerance margin live. Copy the SolidWorks equation when it's right.",
+                  zh:'输入减速器几何参数，用三个修型项塑造齿廓，实时读取背隙、刚度与公差余量。满意后直接复制 SolidWorks 方程。' },
+  setup_h:      { en:'Geometry & spec', zh:'几何参数与工况' },
+  lbl_Rb:       { en:'pin-circle Rb', zh:'针齿中心圆 Rb' },
+  lbl_Rr:       { en:'pin radius Rr', zh:'针齿半径 Rr' },
+  lbl_E:        { en:'eccentricity E', zh:'偏心距 E' },
+  lbl_N:        { en:'lobes N', zh:'齿数 N' },
+  lbl_tol:      { en:'tolerance', zh:'公差叠加' },
+  lbl_T:        { en:'rated torque', zh:'额定扭矩' },
+  warn:         { en:"Geometry undercuts — the unmodified tooth can't mesh with all pins. Reduce E or increase Rb.",
+                  zh:'几何根切 —— 未修型齿廓无法与全部针齿共轭啮合。请减小 E 或增大 Rb。' },
+  mesh_h:       { en:'Mesh', zh:'啮合' },
+  mesh_aux:     { en:'ratio {R}:1 · output frame', zh:'减速比 {R}:1 · 输出坐标系' },
+  jam:          { en:'Tolerance jam — locks under the tolerance stack', zh:'公差卡死 —— 在公差叠加下摆线盘锁死' },
+  play_pause:   { en:'❚❚ pause', zh:'❚❚ 暂停' },
+  play_play:    { en:'▶ play', zh:'▶ 播放' },
+  speed:        { en:'speed', zh:'速度' },
+  lg_pins:      { en:'pins / housing', zh:'针齿 / 壳体' },
+  lg_disk:      { en:'disk (your design)', zh:'摆线盘（你的设计）' },
+  lg_load:      { en:'tooth under load', zh:'受载齿' },
+  mod_h:        { en:'Modification', zh:'修型' },
+  preset_uniform:{ en:'uniform', zh:'等距' },
+  preset_deep:  { en:'deep', zh:'深修' },
+  preset_ga:    { en:'GA optimum', zh:'GA 最优' },
+  lbl_offset:   { en:'offset', zh:'等距量' },
+  desc_offset:  { en:'even removal', zh:'均匀去料' },
+  desc_s1:      { en:'tip ↔ root bias', zh:'齿顶↔齿根偏置' },
+  desc_s2:      { en:'mid-flank (reverse-bow)', zh:'齿腰（反弓）' },
+  m_backlash:   { en:'backlash', zh:'背隙' },
+  sub_backlash: { en:'lost motion, worst crank angle', zh:'空回，最差曲柄角' },
+  m_stiff:      { en:'stiffness', zh:'刚度' },
+  sub_stiff:    { en:'torsional, worst crank angle', zh:'扭转，最差曲柄角' },
+  m_ripple:     { en:'ripple', zh:'波动' },
+  sub_ripple:   { en:'wind-up variation = smoothness', zh:'加载转角波动 = 丝滑度' },
+  m_margin:     { en:'tolerance margin', zh:'公差余量' },
+  sub_margin:   { en:'free play left under the stack', zh:'公差叠加下剩余游隙' },
+  m_teeth:      { en:'loaded teeth', zh:'受载齿数' },
+  sub_teeth:    { en:'sharing the rated torque', zh:'分担额定扭矩' },
+  tooth_h:      { en:'Tooth flank', zh:'齿面' },
+  tooth_aux:    { en:'one tooth · modification', zh:'单齿 · 修型' },
+  lg_unmod:     { en:'unmodified (pure conjugate)', zh:'未修型（纯共轭）' },
+  lg_mod:       { en:'modified flank', zh:'修型后齿面' },
+  clr_h:        { en:'Clearance across one tooth', zh:'单齿间隙分布' },
+  clr_aux:      { en:'normal gap vs mesh phase', zh:'法向间隙 vs 啮合相位' },
+  lg_shipped:   { en:'shipped design', zh:'当前出图设计' },
+  lg_uniform:   { en:'uniform', zh:'等距' },
+  lg_yours:     { en:'your design', zh:'你的设计' },
+  lg_tol:       { en:'tolerance budget', zh:'公差预算' },
+  export_h:     { en:'Export to SolidWorks', zh:'导出到 SolidWorks' },
+  export_sub:   { en:'equation-driven curve · numbers baked in · units mm', zh:'方程驱动曲线 · 数值已内联 · 单位 mm' },
+  btn_copyx:    { en:'Copy X(t)', zh:'复制 X(t)' },
+  btn_copyy:    { en:'Copy Y(t)', zh:'复制 Y(t)' },
+  btn_copyboth: { en:'Copy both', zh:'复制两式' },
+  btn_csv:      { en:'Download point-cloud CSV', zh:'下载点云 CSV' },
+  copied:       { en:'✓ copied', zh:'✓ 已复制' },
+  how:          { en:'In SolidWorks: Insert → Curve → Equation Driven Curve → Parametric. Set t from 0 to 6.28318, paste X(t) and Y(t). Or import the CSV via Insert → Curve → Curve Through XYZ Points, then Fit Spline.',
+                  zh:'在 SolidWorks 中：插入 → 曲线 → 方程驱动曲线 → 参数化。设 t 从 0 到 6.28318，粘贴 X(t) 与 Y(t)。或用 插入 → 曲线 → 通过 XYZ 点的曲线 导入 CSV，再用 拟合样条。' },
+  c_tip:        { en:'tip', zh:'齿顶' },
+  c_root:       { en:'root', zh:'齿根' },
+  c_mid:        { en:'mid-flank', zh:'齿腰' },
+  c_clr:        { en:'clearance µm', zh:'间隙 µm' },
+  c_stack:      { en:'tolerance stack', zh:'公差叠加' },
+  footer_read:  { en:"Reading it: tight at the mid-flank (where the arm is longest) carries load with little lost motion — that buys stiffness and low backlash. Relieved at tip and root leaves room for the tolerance stack and softens entry/exit shock. That reverse-bow, sitting right at the tolerance edge, is what the GA optimum finds.",
+                  zh:'看图：齿腰（力臂最长处）最紧 —— 用极小的空回承载，换来高刚度、低背隙；齿顶与齿根放松 —— 给公差叠加留余量、缓和入啮/出啮冲击。这条贴着公差边界的"反弓"曲线，正是 GA 最优解。' },
+  footer_note:  { en:'Model: quasi-static, rigid disk, linearised contact (K=50 N/µm per tooth). Trends are faithful; absolute values are order-of-magnitude. Physics ported from CycloidalModAnalysis.py. No lubricant film / dynamics.',
+                  zh:'模型：准静态、刚性盘、线性化接触（K=50 N/µm 每齿）。趋势可靠，绝对值为量级估计。物理模型移植自 CycloidalModAnalysis.py，未含油膜与动力学。' },
 };
-const state = { offset:PRESETS.ga.offset, s1:PRESETS.ga.s1, s2:PRESETS.ga.s2,
-                psi:0, playing:true, speed:0.45, exag:40 };
+const state = { offset:-0.0254, s1:-0.0034, s2:-0.0081, psi:0, playing:true, speed:0.45, exag:40, lang:'en' };
+function t(key){ const e=TXT[key]; return e ? (e[state.lang]||e.en) : key; }
+
+// ============================ presets, colors, baseline ============================
+const PRESETS = {
+  uniform: { offset:-0.040,  s1:0,       s2:0 },
+  deep:    { offset:-0.075,  s1:0,       s2:0 },
+  ga:      { offset:-0.0254, s1:-0.0034, s2:-0.0081 },
+};
 const css = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
 const COL = {};
 for (const k of ['blue','orange','green','hot','danger','steel','ink','ink-2','ink-3','line','line-2','panel'])
   COL[k] = css('--'+k);
-
-// baseline = the actual shipped design (pertooth radial), for the delta arrows
-const BASE = evaluate(-0.075, 0.05, 0, 4000, 'pertooth');
+let BASE = null;  // pertooth reference at current geometry, for delta arrows
 
 // ============================ canvas helpers ============================
+const I = id => document.getElementById(id);
 function fit(cv){
   const dpr=Math.min(window.devicePixelRatio||1, 2);
   const w=cv.clientWidth, h=cv.clientHeight;
@@ -320,64 +483,39 @@ function fit(cv){
   return {ctx,w,h};
 }
 
-// ---- mesh stage ----
-const stage=document.getElementById('stage');
-let meshProf=profile(state.offset,state.s1,state.s2,1440);
+// ---- mesh ----
+const stage=I('stage');
+let meshProf=null;
 function drawMesh(){
   const {ctx,w,h}=fit(stage);
   ctx.clearRect(0,0,w,h);
   const cx=w/2, cy=h/2, R=Math.min(w,h)/2-14, sc=R/(Rb+Rr+2.5);
   const toX=x=>cx+x*sc, toY=y=>cy-y*sc;
-
-  // housing ring
   ctx.strokeStyle=COL.steel; ctx.lineWidth=1;
   ctx.beginPath(); ctx.arc(cx,cy,(Rb+Rr+1.6)*sc,0,2*Math.PI); ctx.stroke();
-
-  // mesh + load at current psi
-  const ms=meshState(meshProf,state.psi);
-  const wnd=windup(ms.gaps,ms.arms);
-  const Fmax=Math.max(1e-9,...wnd.F);
-
-  // pins
+  const ms=meshState(meshProf,state.psi), wnd=windup(ms.gaps,ms.arms), Fmax=Math.max(1e-9,...wnd.F);
   for(let j=0;j<Np;j++){
     const [px,py]=PINS[j], f=wnd.F[j]/Fmax;
-    if(f>0.02){
-      ctx.beginPath(); ctx.arc(toX(px),toY(py),Rr*sc+7,0,2*Math.PI);
-      ctx.fillStyle=`rgba(250,178,25,${0.05+0.22*f})`; ctx.fill();
-    }
+    if(f>0.02){ ctx.beginPath(); ctx.arc(toX(px),toY(py),Rr*sc+7,0,2*Math.PI); ctx.fillStyle=`rgba(250,178,25,${0.05+0.22*f})`; ctx.fill(); }
     ctx.beginPath(); ctx.arc(toX(px),toY(py),Rr*sc,0,2*Math.PI);
     ctx.strokeStyle= f>0.02 ? COL.hot : COL.steel; ctx.lineWidth= f>0.02?1.6:1; ctx.stroke();
   }
-
-  // disk polygon (world coords already in ms via transform of meshProf)
-  const {X,Y,TH}=meshProf, co=Math.cos(ms.rot), si=Math.sin(ms.rot);
+  const {X,Y}=meshProf, co=Math.cos(ms.rot), si=Math.sin(ms.rot);
   ctx.beginPath();
-  for(let i=0;i<X.length;i++){
-    const wx=co*X[i]-si*Y[i]+ms.cx, wy=si*X[i]+co*Y[i]+ms.cy;
-    const sx=toX(wx), sy=toY(wy); i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy);
-  }
-  ctx.closePath();
-  ctx.fillStyle='rgba(34,184,146,0.07)'; ctx.fill();
-  ctx.strokeStyle=COL.green; ctx.lineWidth=1.4; ctx.stroke();
-
-  // eccentric marker: disk centre + crank
+  for(let i=0;i<X.length;i++){ const wx=co*X[i]-si*Y[i]+ms.cx, wy=si*X[i]+co*Y[i]+ms.cy; const sx=toX(wx), sy=toY(wy); i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy); }
+  ctx.closePath(); ctx.fillStyle='rgba(34,184,146,0.07)'; ctx.fill(); ctx.strokeStyle=COL.green; ctx.lineWidth=1.5; ctx.stroke();
   ctx.strokeStyle=COL['line-2']; ctx.lineWidth=1;
   ctx.beginPath(); ctx.moveTo(toX(0),toY(0)); ctx.lineTo(toX(ms.cx),toY(ms.cy)); ctx.stroke();
   ctx.beginPath(); ctx.arc(toX(ms.cx),toY(ms.cy),3,0,2*Math.PI); ctx.fillStyle=COL.ink; ctx.fill();
   ctx.beginPath(); ctx.arc(toX(0),toY(0),2,0,2*Math.PI); ctx.fillStyle=COL['ink-3']; ctx.fill();
-
-  // contact ticks
-  for(let j=0;j<Np;j++){ if(wnd.F[j]/Fmax>0.02){
-    ctx.beginPath(); ctx.arc(toX(ms.cpx[j]),toY(ms.cpy[j]),2.4,0,2*Math.PI); ctx.fillStyle=COL.hot; ctx.fill(); } }
+  for(let j=0;j<Np;j++){ if(wnd.F[j]/Fmax>0.02){ ctx.beginPath(); ctx.arc(toX(ms.cpx[j]),toY(ms.cpy[j]),2.4,0,2*Math.PI); ctx.fillStyle=COL.hot; ctx.fill(); } }
 }
 
-// ---- tooth flank inset ----
-const tooth=document.getElementById('tooth');
+// ---- tooth flank ----
+const tooth=I('tooth');
 function drawTooth(){
   const {ctx,w,h}=fit(tooth);
   ctx.clearRect(0,0,w,h);
-  // one tooth in real XY: unmodified conjugate flank vs modified flank, with the
-  // (micron-scale) normal modification magnified so it's visible on a 34 mm part.
   const tp=2*Math.PI/N, span=tp*0.60, ex=state.exag, nS=280;
   const bx=[],by=[],mx=[],my=[];
   for(let k=0;k<=nS;k++){
@@ -386,34 +524,28 @@ function drawTooth(){
     const dx=-Rb*Math.sin(th)-E*M*Math.sin(M*th), dy=Rb*Math.cos(th)+E*M*Math.cos(M*th);
     const nn=Math.hypot(dx,dy), nx=dy/nn, ny=-dx/nn;
     const d=state.offset+state.s1*Math.cos(N*th)+state.s2*Math.cos(2*N*th);
-    // rotate tip-up (+90°) so the tooth reads like a gear-tooth cross-section
-    const bxr=xc-Rr*nx, byr=yc-Rr*ny;
-    const mxr=xc-Rr*nx + d*ex*nx, myr=yc-Rr*ny + d*ex*ny;
-    bx.push(-byr); by.push(bxr);
-    mx.push(-myr); my.push(mxr);
+    const bxr=xc-Rr*nx, byr=yc-Rr*ny, mxr=xc-Rr*nx+d*ex*nx, myr=yc-Rr*ny+d*ex*ny;
+    bx.push(-byr); by.push(bxr); mx.push(-myr); my.push(mxr);  // rotate tip-up
   }
   let minx=1e9,maxx=-1e9,miny=1e9,maxy=-1e9;
   for(let k=0;k<bx.length;k++){ minx=Math.min(minx,bx[k],mx[k]); maxx=Math.max(maxx,bx[k],mx[k]); miny=Math.min(miny,by[k],my[k]); maxy=Math.max(maxy,by[k],my[k]); }
-  const pad=30, sc=Math.min((w-2*pad)/(maxx-minx),(h-2*pad)/(maxy-miny));
+  const pad=32, sc=Math.min((w-2*pad)/(maxx-minx),(h-2*pad)/(maxy-miny));
   const ox=(w-(maxx-minx)*sc)/2-minx*sc, oyTop=(h-(maxy-miny)*sc)/2;
   const X=x=>ox+x*sc, Y=y=>oyTop+(maxy-y)*sc;
-  // fill = material removed (between the two flanks)
   ctx.beginPath();
   for(let k=0;k<bx.length;k++){ const x=X(bx[k]),y=Y(by[k]); k?ctx.lineTo(x,y):ctx.moveTo(x,y); }
   for(let k=mx.length-1;k>=0;k--){ ctx.lineTo(X(mx[k]),Y(my[k])); }
   ctx.closePath(); ctx.fillStyle='rgba(34,184,146,0.10)'; ctx.fill();
   const stroke=(XS,YS,c,wd)=>{ ctx.beginPath(); for(let k=0;k<XS.length;k++){const x=X(XS[k]),y=Y(YS[k]); k?ctx.lineTo(x,y):ctx.moveTo(x,y);} ctx.strokeStyle=c; ctx.lineWidth=wd; ctx.stroke(); };
-  stroke(bx,by,'#8b96a6',1.6);
-  stroke(mx,my,COL.green,2.2);
-  // labels: tip at tooth centre (th=0), root at the edges
-  ctx.fillStyle=COL['ink-3']; ctx.font='11px '+css('--mono'); ctx.textAlign='center';
-  ctx.fillText('root', X(bx[6]), Y(by[6])+15);
-  ctx.fillText('tip', X(bx[Math.round(nS/2)]), Y(by[Math.round(nS/2)])-12);
-  ctx.fillText('root', X(bx[bx.length-6]), Y(by[by.length-6])+15);
+  stroke(bx,by,'#8b96a6',1.6); stroke(mx,my,COL.green,2.2);
+  ctx.fillStyle=COL['ink-3']; ctx.font='13px '+css('--mono'); ctx.textAlign='center';
+  ctx.fillText(t('c_root'), X(bx[6]), Y(by[6])+16);
+  ctx.fillText(t('c_tip'), X(bx[Math.round(nS/2)]), Y(by[Math.round(nS/2)])-13);
+  ctx.fillText(t('c_root'), X(bx[bx.length-6]), Y(by[by.length-6])+16);
 }
 
-// ---- clearance distribution ----
-const clr=document.getElementById('clr');
+// ---- clearance ----
+const clr=I('clr');
 function clearanceCurve(offset,s1,s2,variant){
   const prof=profile(offset,s1,s2,4000,variant), ms=meshState(prof,0);
   const idx=[...ms.uu.keys()].sort((a,b)=>ms.uu[a]-ms.uu[b]);
@@ -422,72 +554,121 @@ function clearanceCurve(offset,s1,s2,variant){
 function drawClearance(){
   const {ctx,w,h}=fit(clr);
   ctx.clearRect(0,0,w,h);
-  const padL=46, padR=14, padT=14, padB=26;
+  const padL=50, padR=14, padT=14, padB=28;
   const series=[
-    ['current', ()=>clearanceCurve(-0.075,0.05,0,'pertooth'),                COL.blue,   1.4],
-    ['uniform', ()=>clearanceCurve(-0.040,0,0,'harmonic'),                   COL.orange, 1.4],
-    ['active',  ()=>clearanceCurve(state.offset,state.s1,state.s2,'harmonic'), COL.green, 2.2],
+    ['shipped', ()=>clearanceCurve(-0.075,0.05,0,'pertooth'),                COL.blue,   1.5],
+    ['uniform', ()=>clearanceCurve(-0.040,0,0,'harmonic'),                   COL.orange, 1.5],
+    ['yours',   ()=>clearanceCurve(state.offset,state.s1,state.s2,'harmonic'), COL.green, 2.4],
   ].map(([n,f,c,wd])=>({n,c,wd,data:f()}));
-  let ymin=10, ymax=15;
+  let ymin=10, ymax=Math.max(20, TOL*1e3+5);
   for(const s of series) for(const d of s.data){ ymin=Math.min(ymin,d[1]); ymax=Math.max(ymax,d[1]); }
   ymin=Math.floor((ymin-2)/5)*5; ymax=Math.ceil((ymax+2)/5)*5;
   const mapx=u=>padL+u*(w-padL-padR), mapy=v=>padT+(ymax-v)/(ymax-ymin)*(h-padT-padB);
-  // gridlines + y labels
-  ctx.font='10.5px '+css('--mono'); ctx.textAlign='right'; ctx.textBaseline='middle';
+  ctx.font='12px '+css('--mono'); ctx.textAlign='right'; ctx.textBaseline='middle';
   for(let v=ymin; v<=ymax; v+=10){
     ctx.strokeStyle=COL.line; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(padL,mapy(v)); ctx.lineTo(w-padR,mapy(v)); ctx.stroke();
     ctx.fillStyle=COL['ink-3']; ctx.fillText(v, padL-6, mapy(v));
   }
-  // tolerance budget line
-  ctx.strokeStyle=COL.danger; ctx.lineWidth=1.2; ctx.setLineDash([5,4]);
+  ctx.strokeStyle=COL.danger; ctx.lineWidth=1.3; ctx.setLineDash([5,4]);
   ctx.beginPath(); ctx.moveTo(padL,mapy(TOL*1e3)); ctx.lineTo(w-padR,mapy(TOL*1e3)); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle=COL.danger; ctx.textAlign='left'; ctx.fillText('±15 µm stack', padL+4, mapy(TOL*1e3)-8);
-  // x labels
+  ctx.fillStyle=COL.danger; ctx.textAlign='left'; ctx.fillText(`±${(TOL*1e3).toFixed(0)} µm ${t('c_stack')}`, padL+4, mapy(TOL*1e3)-8);
   ctx.fillStyle=COL['ink-3']; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
-  ctx.fillText('tip', mapx(0), h-8); ctx.fillText('mid-flank', mapx(0.25), h-8);
-  ctx.fillText('root', mapx(0.5), h-8); ctx.fillText('mid-flank', mapx(0.75), h-8); ctx.fillText('tip', mapx(0.98), h-8);
-  ctx.textAlign='right'; ctx.save(); ctx.translate(12,h/2); ctx.rotate(-Math.PI/2); ctx.textAlign='center'; ctx.fillText('clearance µm',0,0); ctx.restore();
-  // series
+  ctx.fillText(t('c_tip'), mapx(0), h-9); ctx.fillText(t('c_mid'), mapx(0.25), h-9);
+  ctx.fillText(t('c_root'), mapx(0.5), h-9); ctx.fillText(t('c_mid'), mapx(0.75), h-9); ctx.fillText(t('c_tip'), mapx(0.98), h-9);
+  ctx.textAlign='right'; ctx.save(); ctx.translate(13,h/2); ctx.rotate(-Math.PI/2); ctx.textAlign='center'; ctx.fillText(t('c_clr'),0,0); ctx.restore();
   for(const s of series){
     ctx.beginPath(); s.data.forEach((d,i)=>{ const x=mapx(d[0]),y=mapy(d[1]); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
     ctx.strokeStyle=s.c; ctx.lineWidth=s.wd; ctx.stroke();
-    for(const d of s.data){ ctx.beginPath(); ctx.arc(mapx(d[0]),mapy(d[1]), s.n==='active'?2.6:1.8,0,2*Math.PI); ctx.fillStyle=s.c; ctx.fill(); }
+    for(const d of s.data){ ctx.beginPath(); ctx.arc(mapx(d[0]),mapy(d[1]), s.n==='yours'?2.8:1.9,0,2*Math.PI); ctx.fillStyle=s.c; ctx.fill(); }
   }
 }
 
 // ============================ metrics ============================
 const fmt=(x,d=2)=> (isFinite(x)? x.toFixed(d): '—');
-function deltaTag(now, base, better){ // better: 'up' good if higher, 'down' good if lower
+function deltaTag(now, base, better){
+  if(!isFinite(now)||!isFinite(base)) return '';
   const d=now-base; if(Math.abs(d)<1e-6) return '';
   const good = better==='high' ? d>0 : d<0;
-  const arrow = d>0?'▲':'▼';
-  return `<span class="delta ${good?'up':'down'}">${arrow}${Math.abs(d).toFixed(better==='ripple'?0:1)}</span>`;
+  return `<span class="delta ${good?'up':'down'}">${d>0?'▲':'▼'}${Math.abs(d).toFixed(better==='ripple'?0:1)}</span>`;
 }
 function updateMetrics(){
   const r=evaluate(state.offset,state.s1,state.s2);
-  const set=(id,html,cls)=>{ const el=document.getElementById(id); el.innerHTML=html; el.className='v'+(cls?' '+cls:''); };
-  set('m-backlash', `${fmt(r.backlash)}<u>′</u> ${deltaTag(r.backlash,BASE.backlash,'low')}`);
-  set('m-stiff',    `${fmt(r.stiff,1)}<u>N·m/′</u> ${deltaTag(r.stiff,BASE.stiff,'high')}`);
-  set('m-ripple',   `${fmt(r.ripple,1)}<u>µrad</u> ${deltaTag(r.ripple,BASE.ripple,'ripple')}`);
-  const mcls = r.margin<=0?'bad':(r.margin<0.5?'warn':'');
-  set('m-margin',   `${fmt(r.margin)}<u>′</u>`, mcls);
-  set('m-teeth',    `${r.n_eng}<u>/ 19</u>`);
-  document.getElementById('jam').classList.toggle('on', r.margin<=0);
+  const set=(id,html,cls)=>{ const el=I(id); el.innerHTML=html; el.className='v'+(cls?' '+cls:''); };
+  set('m-backlash', `${fmt(r.backlash)}<u>′</u> ${deltaTag(r.backlash,BASE&&BASE.backlash,'low')}`);
+  set('m-stiff',    `${fmt(r.stiff,1)}<u>N·m/′</u> ${deltaTag(r.stiff,BASE&&BASE.stiff,'high')}`);
+  set('m-ripple',   `${fmt(r.ripple,1)}<u>µrad</u> ${deltaTag(r.ripple,BASE&&BASE.ripple,'ripple')}`);
+  set('m-margin',   `${fmt(r.margin)}<u>′</u>`, r.margin<=0?'bad':(r.margin<0.5?'warn':''));
+  set('m-teeth',    `${r.n_eng}<u>/ ${Np}</u>`);
+  I('jam').classList.toggle('on', r.margin<=0);
 }
 
-// ============================ interaction ============================
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-function syncInputs(){
-  document.getElementById('s-offset').value = state.offset*1e3;
-  document.getElementById('s-s1').value = state.s1*1e3;
-  document.getElementById('s-s2').value = state.s2*1e3;
-  document.getElementById('v-offset').textContent = (state.offset*1e3).toFixed(1)+' µm';
-  document.getElementById('v-s1').textContent = (state.s1*1e3).toFixed(1)+' µm';
-  document.getElementById('v-s2').textContent = (state.s2*1e3).toFixed(1)+' µm';
+// ============================ SolidWorks export ============================
+const g = x => String(Math.round(x*1e6)/1e6);
+function swEquations(){
+  const o=state.offset, s1=state.s1, s2=state.s2;
+  const d=`(${g(o)} + ${g(s1)}*cos(${N}*t) + ${g(s2)}*cos(${2*N}*t))`;
+  const den=`sqrt( (-${g(Rb)}*sin(t)-${g(E)}*${M}*sin(${M}*t))^2 + (${g(Rb)}*cos(t)+${g(E)}*${M}*cos(${M}*t))^2 )`;
+  const X=`${g(Rb)}*cos(t)+${g(E)}*cos(${M}*t) + ( ${d} - ${g(Rr)} )*( ${g(Rb)}*cos(t)+${g(E)}*${M}*cos(${M}*t) )/${den}`;
+  const Y=`${g(Rb)}*sin(t)+${g(E)}*sin(${M}*t) + ( ${d} - ${g(Rr)} )*( ${g(Rb)}*sin(t)+${g(E)}*${M}*sin(${M}*t) )/${den}`;
+  return {X,Y};
 }
-function rebuild(){ meshProf=profile(state.offset,state.s1,state.s2,1440); }
+function refreshExport(){
+  const {X,Y}=swEquations();
+  I('eq-x').textContent=X; I('eq-y').textContent=Y;
+}
+function flashCopied(btn){ const key=btn.dataset.i18n; btn.textContent=t('copied'); setTimeout(()=>{ btn.textContent=t(key); },1200); }
+function copyText(txt, btn){
+  const ok=()=>flashCopied(btn);
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(ok).catch(()=>fallbackCopy(txt,ok)); }
+  else fallbackCopy(txt,ok);
+}
+function fallbackCopy(txt,ok){ const ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} document.body.removeChild(ta); ok(); }
+function downloadCSV(){
+  const prof=profile(state.offset,state.s1,state.s2,4000,'harmonic');
+  let s="X,Y,Z\n"; for(let i=0;i<prof.X.length;i+=20) s+=`${prof.X[i].toFixed(6)},${prof.Y[i].toFixed(6)},0.000000\n`;
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([s],{type:'text/csv'}));
+  a.download=`cycloid_Rb${g(Rb)}_N${N}_off${g(state.offset*1e3)}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
+}
+
+// ============================ language ============================
+function playLabel(){ return t(state.playing?'play_pause':'play_play'); }
+function applyLang(lang){
+  state.lang=lang;
+  document.documentElement.lang = lang==='zh'?'zh-CN':'en';
+  document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent=t(el.dataset.i18n); });
+  I('ratio').textContent=t('mesh_aux').replace('{R}', N);
+  I('play').textContent=playLabel();
+  I('lang-en').classList.toggle('on', lang==='en');
+  I('lang-zh').classList.toggle('on', lang==='zh');
+  updateMetrics();
+  drawTooth(); drawClearance();
+}
+
+// ============================ geometry / interaction ============================
+const clampNum=(v,a,b)=>Math.max(a,Math.min(b,v));
+function applyGeometry(){
+  Rb=clampNum(+I('g-Rb').value||34, 15, 120);
+  Rr=clampNum(+I('g-Rr').value||2.5, 0.5, 12);
+  E =clampNum(+I('g-E').value||1.5, 0.2, 6);
+  N =Math.round(clampNum(+I('g-N').value||18, 6, 40)); M=N+1; Np=N+1;
+  TOL=clampNum(+I('g-tol').value||15, 1, 80)/1000;
+  T_RATED=clampNum(+I('g-T').value||30, 1, 500);
+  rebuildPins();
+  ROT_SIGN=pickRotSign();
+  I('warn').classList.toggle('on', GEOM_WORST>0.003);
+  BASE=evaluate(-0.075,0.05,0,4000,'pertooth');
+  I('ratio').textContent=t('mesh_aux').replace('{R}', N);
+  afterChange();
+}
+function syncSliders(){
+  I('s-offset').value=state.offset*1e3; I('s-s1').value=state.s1*1e3; I('s-s2').value=state.s2*1e3;
+  I('v-offset').textContent=(state.offset*1e3).toFixed(1)+' µm';
+  I('v-s1').textContent=(state.s1*1e3).toFixed(1)+' µm';
+  I('v-s2').textContent=(state.s2*1e3).toFixed(1)+' µm';
+}
+function rebuildMeshProf(){ meshProf=profile(state.offset,state.s1,state.s2,1440); }
 let mt; function scheduleMetrics(){ clearTimeout(mt); mt=setTimeout(updateMetrics,60); }
-function afterChange(){ syncInputs(); rebuild(); drawTooth(); drawClearance(); scheduleMetrics(); markPreset(); }
+function afterChange(){ syncSliders(); rebuildMeshProf(); drawTooth(); drawClearance(); refreshExport(); scheduleMetrics(); markPreset(); }
 
 function markPreset(){
   const hit=Object.entries(PRESETS).find(([k,p])=>
@@ -497,24 +678,33 @@ function markPreset(){
 document.querySelectorAll('.presets button').forEach(b=>b.addEventListener('click',()=>{
   const p=PRESETS[b.dataset.k]; state.offset=p.offset; state.s1=p.s1; state.s2=p.s2; afterChange();
 }));
-document.getElementById('s-offset').addEventListener('input',e=>{ state.offset=clamp(+e.target.value/1e3,-0.1,-0.015); afterChange(); });
-document.getElementById('s-s1').addEventListener('input',e=>{ state.s1=+e.target.value/1e3; afterChange(); });
-document.getElementById('s-s2').addEventListener('input',e=>{ state.s2=+e.target.value/1e3; afterChange(); });
+I('s-offset').addEventListener('input',e=>{ state.offset=clampNum(+e.target.value/1e3,-0.1,-0.015); afterChange(); });
+I('s-s1').addEventListener('input',e=>{ state.s1=+e.target.value/1e3; afterChange(); });
+I('s-s2').addEventListener('input',e=>{ state.s2=+e.target.value/1e3; afterChange(); });
+['g-Rb','g-Rr','g-E','g-N','g-tol','g-T'].forEach(id=>I(id).addEventListener('input',applyGeometry));
 
-const playBtn=document.getElementById('play');
-playBtn.addEventListener('click',()=>{ state.playing=!state.playing; playBtn.textContent=state.playing?'❚❚ pause':'▶ play'; playBtn.setAttribute('aria-pressed',state.playing); });
-document.getElementById('speed').addEventListener('input',e=>{ state.speed=+e.target.value/100; });
+I('play').addEventListener('click',()=>{ state.playing=!state.playing; I('play').textContent=playLabel(); I('play').setAttribute('aria-pressed',state.playing); });
+I('speed').addEventListener('input',e=>{ state.speed=+e.target.value/100; });
+I('copy-x').addEventListener('click',e=>copyText(swEquations().X, e.currentTarget));
+I('copy-y').addEventListener('click',e=>copyText(swEquations().Y, e.currentTarget));
+I('copy-both').addEventListener('click',e=>{ const {X,Y}=swEquations(); copyText('X(t):\n'+X+'\n\nY(t):\n'+Y, e.currentTarget); });
+I('dl-csv').addEventListener('click',downloadCSV);
+I('lang-en').addEventListener('click',()=>applyLang('en'));
+I('lang-zh').addEventListener('click',()=>applyLang('zh'));
 
-// ============================ animation loop ============================
+// ============================ animation ============================
 let last=performance.now();
-function loop(t){
-  const dt=Math.min(0.05,(t-last)/1000); last=t;
+function loop(tm){
+  const dt=Math.min(0.05,(tm-last)/1000); last=tm;
   if(state.playing){ state.psi=(state.psi+dt*(0.3+state.speed*2.4))%(2*Math.PI); drawMesh(); }
   requestAnimationFrame(loop);
 }
 window.addEventListener('resize',()=>{ drawMesh(); drawTooth(); drawClearance(); });
 
-// init
-syncInputs(); rebuild(); updateMetrics(); drawTooth(); drawClearance(); drawMesh();
+// ============================ init ============================
+applyGeometry();      // sets ROT_SIGN, PINS, BASE, meshProf via afterChange
+applyLang('en');
+refreshExport();
+drawMesh();
 requestAnimationFrame(loop);
 </script>
