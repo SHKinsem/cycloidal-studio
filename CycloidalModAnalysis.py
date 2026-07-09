@@ -26,23 +26,36 @@ TH = np.linspace(0, 2*np.pi, NTH, endpoint=False)
 PIN_XY = np.stack([Rb*np.cos(2*np.pi*np.arange(Np)/Np),
                    Rb*np.sin(2*np.pi*np.arange(Np)/Np)], axis=1)
 
-def profile(offset, shift, variant):
-    """修型齿廓 (盘坐标系)。variant: 'pertooth'=Python逐齿二次 | 'sw'=导出的SolidWorks余弦 | 'none'"""
+def profile(offset, shift, variant, s2=0.0):
+    """修型齿廓 (盘坐标系)。
+    variant:
+      'harmonic' : 法向修型 δ(θ)=offset+shift·cos(N·θ)+s2·cos(2N·θ)  [shift 即 s1]
+                   轮廓 = 基线 + (δ - Rr)·n̂ , 与 SolidWorks COMPACT 方程同构、可精确导出。
+                   紧点位置: s1>0 齿顶紧 / s1<0 齿根紧 / s2<0 齿腰(u≈0.25)紧。
+      'pertooth' : 旧版 Python 逐齿二次修型, 沿径向 (历史对照)
+      'sw'       : 旧版导出到 SolidWorks 的余弦修型, 沿径向 (历史对照, 相位与 pertooth 差半齿距)
+      'none'     : 无修型
+    """
     xc = Rb*np.cos(TH) + E*np.cos(M*TH)
     yc = Rb*np.sin(TH) + E*np.sin(M*TH)
     dx = -Rb*np.sin(TH) - E*M*np.sin(M*TH)
     dy =  Rb*np.cos(TH) + E*M*np.cos(M*TH)
     nn = np.hypot(dx, dy)
     nx, ny = dy/nn, -dx/nn
-    xs, ys = xc - Rr*nx, yc - Rr*ny
     tp = 2*np.pi/N
+    if variant == 'harmonic':
+        d = offset + shift*np.cos(N*TH) + s2*np.cos(2*N*TH)
+        return xc + (d - Rr)*nx, yc + (d - Rr)*ny
+    xs, ys = xc - Rr*nx, yc - Rr*ny
     if variant == 'pertooth':
         ph = (TH % tp) - tp/2
         d  = offset + shift*(ph/(tp/2))**2
     elif variant == 'sw':
         d  = offset + shift*(1 - np.cos(N*TH))/2
-    else:
+    elif variant == 'none':
         d  = np.zeros(NTH)
+    else:
+        raise ValueError(f"unknown variant: {variant!r}")
     r = np.hypot(xs, ys)
     return xs + d*xs/r, ys + d*ys/r
 
@@ -94,9 +107,9 @@ def windup(gaps, arms):
     eng = F > 0
     return b - hi, K_CONTACT*np.sum(arms[eng]**2), int(eng.sum()), F
 
-def evaluate(offset, shift, variant):
-    """跨曲柄角聚合: 背隙(最坏)[arcmin], 刚度(最差)[N*m/arcmin], 加载转角波动[urad], 公差余量(最小)[rad], 最少受载齿数"""
-    X, Y = profile(offset, shift, variant)
+def evaluate(offset, shift, variant, s2=0.0):
+    """跨曲柄角聚合: 背隙(最坏)[arcmin], 刚度(最差)[N*m/arcmin], 加载转角波动[urad], 公差余量(最小)[arcmin], 最少受载齿数"""
+    X, Y = profile(offset, shift, variant, s2=s2)
     plays, margins, ks, wus, nes = [], [], [], [], []
     for psi in PSI_SAMPLES:
         gaps, arms, _ = mesh_state(X, Y, psi, ROT_SIGN)
@@ -111,7 +124,7 @@ def evaluate(offset, shift, variant):
     return dict(backlash=np.max(plays)*arcmin,
                 stiff=k_min/1e3/arcmin,             # N*m / arcmin
                 ripple=(np.max(wus)-np.min(wus))*1e6,
-                margin=np.min(margins),
+                margin=np.min(margins)*arcmin,      # arcmin
                 n_eng=int(np.min(nes)))
 
 # —— 运动学符号自检: 无修型齿廓必须与全部19针同时接触(共轭), 最大间隙≈0 ——
@@ -160,7 +173,7 @@ def _main():
         b_of, b_sh = OFFS[best[1]], SHFS[best[0]]
         rb = evaluate(b_of, b_sh, 'pertooth')
         print(f"[推荐] offset={b_of:.3f}, shift={b_sh:.3f}: 背隙={rb['backlash']:.2f} arcmin, "
-              f"刚度={rb['stiff']:.1f} N*m/arcmin, 受载齿数>={rb['n_eng']}, 公差余量={rb['margin']*180/np.pi*60:.2f} arcmin")
+              f"刚度={rb['stiff']:.1f} N*m/arcmin, 受载齿数>={rb['n_eng']}, 公差余量={rb['margin']:.2f} arcmin")
 
     # —— 3. 绘图 ——
     C_BLUE, C_ORANGE, C_GRAY = '#2563eb', '#ea8600', '#9aa0a6'
