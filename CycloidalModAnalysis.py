@@ -123,119 +123,123 @@ for s in (-1.0, 1.0):
         ROT_SIGN = s
         break
 assert ROT_SIGN is not None, "共轭自检失败: 检查曲线/运动学约定"
-print(f"[自检通过] 无修型齿廓与19针全接触 (rot_sign={ROT_SIGN:+.0f})")
+print(f"[self-check OK] unmodified profile contacts all {Np} pins (rot_sign={ROT_SIGN:+.0f})")
 
-# —— 1. 当前设计: pertooth(Python/CSV几何) vs sw(SolidWorks方程几何) ——
-print("\n== 当前参数 offset=%.3f shift=%.3f 两种相位对比 ==" % (CUR_OFFSET, CUR_SHIFT))
-res = {}
-for v in ('pertooth', 'sw'):
-    res[v] = evaluate(CUR_OFFSET, CUR_SHIFT, v)
-    r = res[v]
-    ok = "可行" if r['margin'] > 0 else "卡死!"
-    print(f"  {v:8s}: 背隙={r['backlash']:.2f} arcmin  刚度={r['stiff']:.1f} N*m/arcmin  "
-          f"受载齿数>={r['n_eng']}  波动={r['ripple']:.1f} urad  公差{TOL_BUDGET*1e3:.0f}um下{ok}")
+def _main():
+    # —— 1. 当前设计: pertooth(Python/CSV几何) vs sw(SolidWorks方程几何) ——
+    print("\n== 当前参数 offset=%.3f shift=%.3f 两种相位对比 ==" % (CUR_OFFSET, CUR_SHIFT))
+    res = {}
+    for v in ('pertooth', 'sw'):
+        res[v] = evaluate(CUR_OFFSET, CUR_SHIFT, v)
+        r = res[v]
+        ok = "可行" if r['margin'] > 0 else "卡死!"
+        print(f"  {v:8s}: 背隙={r['backlash']:.2f} arcmin  刚度={r['stiff']:.1f} N*m/arcmin  "
+              f"受载齿数>={r['n_eng']}  波动={r['ripple']:.1f} urad  公差{TOL_BUDGET*1e3:.0f}um下{ok}")
 
-# —— 2. 参数扫描 (pertooth 几何) ——
-OFFS = np.linspace(-0.16, -0.01, 16)
-SHFS = np.linspace(0.0, 0.15, 16)
-BL = np.full((len(SHFS), len(OFFS)), np.nan)
-ST = np.full_like(BL, np.nan)
-FEAS = np.zeros_like(BL, dtype=bool)
-for iy, sh in enumerate(SHFS):
-    for ix, of in enumerate(OFFS):
-        r = evaluate(of, sh, 'pertooth')
-        BL[iy, ix] = r['backlash']; ST[iy, ix] = r['stiff']
-        FEAS[iy, ix] = r['margin'] > 0
-    print(f"  扫描 {iy+1}/{len(SHFS)}", end='\r')
-print()
+    # —— 2. 参数扫描 (pertooth 几何) ——
+    OFFS = np.linspace(-0.16, -0.01, 16)
+    SHFS = np.linspace(0.0, 0.15, 16)
+    BL = np.full((len(SHFS), len(OFFS)), np.nan)
+    ST = np.full_like(BL, np.nan)
+    FEAS = np.zeros_like(BL, dtype=bool)
+    for iy, sh in enumerate(SHFS):
+        for ix, of in enumerate(OFFS):
+            r = evaluate(of, sh, 'pertooth')
+            BL[iy, ix] = r['backlash']; ST[iy, ix] = r['stiff']
+            FEAS[iy, ix] = r['margin'] > 0
+        print(f"  扫描 {iy+1}/{len(SHFS)}", end='\r')
+    print()
 
-# 推荐点: 可行域内先最小背隙, 同背隙(±10%)取最大刚度
-cand = np.argwhere(FEAS)
-best = None
-if len(cand):
-    bl_min = BL[FEAS].min()
-    pool = [(iy, ix) for iy, ix in cand if BL[iy, ix] <= bl_min*1.10]
-    best = max(pool, key=lambda t: ST[t])
-    b_of, b_sh = OFFS[best[1]], SHFS[best[0]]
-    rb = evaluate(b_of, b_sh, 'pertooth')
-    print(f"[推荐] offset={b_of:.3f}, shift={b_sh:.3f}: 背隙={rb['backlash']:.2f} arcmin, "
-          f"刚度={rb['stiff']:.1f} N*m/arcmin, 受载齿数>={rb['n_eng']}, 公差余量={rb['margin']*180/np.pi*60:.2f} arcmin")
+    # 推荐点: 可行域内先最小背隙, 同背隙(±10%)取最大刚度
+    cand = np.argwhere(FEAS)
+    best = None
+    if len(cand):
+        bl_min = BL[FEAS].min()
+        pool = [(iy, ix) for iy, ix in cand if BL[iy, ix] <= bl_min*1.10]
+        best = max(pool, key=lambda t: ST[t])
+        b_of, b_sh = OFFS[best[1]], SHFS[best[0]]
+        rb = evaluate(b_of, b_sh, 'pertooth')
+        print(f"[推荐] offset={b_of:.3f}, shift={b_sh:.3f}: 背隙={rb['backlash']:.2f} arcmin, "
+              f"刚度={rb['stiff']:.1f} N*m/arcmin, 受载齿数>={rb['n_eng']}, 公差余量={rb['margin']*180/np.pi*60:.2f} arcmin")
 
-# —— 3. 绘图 ——
-C_BLUE, C_ORANGE, C_GRAY = '#2563eb', '#ea8600', '#9aa0a6'
-fig, axes = plt.subplots(2, 2, figsize=(13, 10))
-tp = 2*np.pi/N
+    # —— 3. 绘图 ——
+    C_BLUE, C_ORANGE, C_GRAY = '#2563eb', '#ea8600', '#9aa0a6'
+    fig, axes = plt.subplots(2, 2, figsize=(13, 10))
+    tp = 2*np.pi/N
 
-# (a) 修型量曲线两相位对比
-ax = axes[0, 0]
-th2 = np.linspace(0, 2*tp, 400)
-ph = (th2 % tp) - tp/2
-ax.plot(np.rad2deg(th2), (CUR_OFFSET + CUR_SHIFT*(ph/(tp/2))**2)*1e3, color=C_BLUE, lw=2, label='Python/CSV (pertooth)')
-ax.plot(np.rad2deg(th2), (CUR_OFFSET + CUR_SHIFT*(1-np.cos(N*th2))/2)*1e3, color=C_ORANGE, lw=2, label='SolidWorks export (cos)')
-ax.axvline(np.rad2deg(tp)/2, color=C_GRAY, lw=1, ls=':')
-ax.text(np.rad2deg(tp)/2, CUR_OFFSET*1e3, ' tooth gap', color=C_GRAY, fontsize=8)
-ax.set_xlabel('theta [deg] (2 tooth pitches)'); ax.set_ylabel('delta [um]')
-ax.set_title('(a) Modification curves: phase mismatch (half pitch)')
-ax.legend(); ax.grid(alpha=0.3)
+    # (a) 修型量曲线两相位对比
+    ax = axes[0, 0]
+    th2 = np.linspace(0, 2*tp, 400)
+    ph = (th2 % tp) - tp/2
+    ax.plot(np.rad2deg(th2), (CUR_OFFSET + CUR_SHIFT*(ph/(tp/2))**2)*1e3, color=C_BLUE, lw=2, label='Python/CSV (pertooth)')
+    ax.plot(np.rad2deg(th2), (CUR_OFFSET + CUR_SHIFT*(1-np.cos(N*th2))/2)*1e3, color=C_ORANGE, lw=2, label='SolidWorks export (cos)')
+    ax.axvline(np.rad2deg(tp)/2, color=C_GRAY, lw=1, ls=':')
+    ax.text(np.rad2deg(tp)/2, CUR_OFFSET*1e3, ' tooth gap', color=C_GRAY, fontsize=8)
+    ax.set_xlabel('theta [deg] (2 tooth pitches)'); ax.set_ylabel('delta [um]')
+    ax.set_title('(a) Modification curves: phase mismatch (half pitch)')
+    ax.legend(); ax.grid(alpha=0.3)
 
-# (b) 间隙分布 vs 啮合相位 (19针 = 19个相位采样)
-ax = axes[0, 1]
-for v, c in (('pertooth', C_BLUE), ('sw', C_ORANGE)):
-    Xv, Yv = profile(CUR_OFFSET, CUR_SHIFT, v)
-    gaps, arms, uu = mesh_state(Xv, Yv, 0.0, ROT_SIGN)
-    o = np.argsort(uu)
-    ax.plot(uu[o], gaps[o]*1e3, 'o-', color=c, ms=5, lw=1.2, label=v)
-ax.axhline(TOL_BUDGET*1e3, color=C_GRAY, ls='--', lw=1.2)
-ax.text(0.02, TOL_BUDGET*1e3, f'tolerance budget {TOL_BUDGET*1e3:.0f} um', color=C_GRAY, fontsize=8, va='bottom')
-ax.set_xlabel('contact phase within tooth (0=tip, 0.5=root)'); ax.set_ylabel('normal clearance [um]')
-ax.set_title('(b) Clearance distribution over mesh (psi=0)')
-ax.legend(); ax.grid(alpha=0.3)
+    # (b) 间隙分布 vs 啮合相位 (19针 = 19个相位采样)
+    ax = axes[0, 1]
+    for v, c in (('pertooth', C_BLUE), ('sw', C_ORANGE)):
+        Xv, Yv = profile(CUR_OFFSET, CUR_SHIFT, v)
+        gaps, arms, uu = mesh_state(Xv, Yv, 0.0, ROT_SIGN)
+        o = np.argsort(uu)
+        ax.plot(uu[o], gaps[o]*1e3, 'o-', color=c, ms=5, lw=1.2, label=v)
+    ax.axhline(TOL_BUDGET*1e3, color=C_GRAY, ls='--', lw=1.2)
+    ax.text(0.02, TOL_BUDGET*1e3, f'tolerance budget {TOL_BUDGET*1e3:.0f} um', color=C_GRAY, fontsize=8, va='bottom')
+    ax.set_xlabel('contact phase within tooth (0=tip, 0.5=root)'); ax.set_ylabel('normal clearance [um]')
+    ax.set_title('(b) Clearance distribution over mesh (psi=0)')
+    ax.legend(); ax.grid(alpha=0.3)
 
-# (c) 额定扭矩下每齿受力
-ax = axes[1, 0]
-w = 0.35
-for k_, (v, c) in enumerate((('pertooth', C_BLUE), ('sw', C_ORANGE))):
-    Xv, Yv = profile(CUR_OFFSET, CUR_SHIFT, v)
-    gaps, arms, _ = mesh_state(Xv, Yv, 0.0, ROT_SIGN)
-    _, _, _, F = windup(gaps, arms)
-    ax.bar(np.arange(Np)+(k_-0.5)*w, F, w, color=c, label=v)
-ax.set_xlabel('pin index'); ax.set_ylabel(f'contact force [N] @ {T_RATED:.0f} N*m')
-ax.set_title('(c) Load sharing at rated torque')
-ax.legend(); ax.grid(alpha=0.3, axis='y')
+    # (c) 额定扭矩下每齿受力
+    ax = axes[1, 0]
+    w = 0.35
+    for k_, (v, c) in enumerate((('pertooth', C_BLUE), ('sw', C_ORANGE))):
+        Xv, Yv = profile(CUR_OFFSET, CUR_SHIFT, v)
+        gaps, arms, _ = mesh_state(Xv, Yv, 0.0, ROT_SIGN)
+        _, _, _, F = windup(gaps, arms)
+        ax.bar(np.arange(Np)+(k_-0.5)*w, F, w, color=c, label=v)
+    ax.set_xlabel('pin index'); ax.set_ylabel(f'contact force [N] @ {T_RATED:.0f} N*m')
+    ax.set_title('(c) Load sharing at rated torque')
+    ax.legend(); ax.grid(alpha=0.3, axis='y')
 
-# (d) 摘要
-ax = axes[1, 1]; ax.axis('off')
-lines = [f"Rb={Rb} Rr={Rr} E={E} N={N}   T={T_RATED} N*m  tol={TOL_BUDGET*1e3:.0f} um", ""]
-for v in ('pertooth', 'sw'):
-    r = res[v]
-    lines += [f"{v}:", f"  backlash {r['backlash']:.2f} arcmin | stiffness {r['stiff']:.1f} N*m/arcmin",
-              f"  loaded teeth >= {r['n_eng']} | windup ripple {r['ripple']:.1f} urad",
-              f"  tolerance margin: {'OK' if r['margin']>0 else 'JAMMED'}", ""]
-if best is not None:
-    lines += [f"RECOMMENDED (sweep): offset={b_of:.3f}, shift={b_sh:.3f}",
-              f"  backlash {rb['backlash']:.2f} arcmin | stiffness {rb['stiff']:.1f} N*m/arcmin"]
-ax.text(0.02, 0.95, "\n".join(lines), va='top', family='monospace', fontsize=10)
-fig.suptitle(f'Cycloidal modification analysis - current design (offset={CUR_OFFSET}, shift={CUR_SHIFT})')
-fig.tight_layout()
-fig.savefig('ModAnalysis_current.png', dpi=140)
-print("[OK] ModAnalysis_current.png")
-
-# 扫描热图
-fig2, axs = plt.subplots(1, 2, figsize=(13, 5.2))
-ext = [OFFS[0]*1e3, OFFS[-1]*1e3, SHFS[0]*1e3, SHFS[-1]*1e3]
-for ax, Z, name, cmap in ((axs[0], BL, 'Backlash [arcmin] (worst over crank)', 'viridis_r'),
-                          (axs[1], ST, 'Torsional stiffness [N*m/arcmin] (worst)', 'viridis')):
-    Zm = np.where(FEAS, Z, np.nan)
-    im = ax.imshow(Zm, origin='lower', extent=ext, aspect='auto', cmap=cmap)
-    ax.contourf(OFFS*1e3, SHFS*1e3, ~FEAS, levels=[0.5, 1.5], colors='none', hatches=['xx'])
-    ax.plot(CUR_OFFSET*1e3, CUR_SHIFT*1e3, 's', color='#d93025', ms=9, mfc='none', mew=2, label='current')
+    # (d) 摘要
+    ax = axes[1, 1]; ax.axis('off')
+    lines = [f"Rb={Rb} Rr={Rr} E={E} N={N}   T={T_RATED} N*m  tol={TOL_BUDGET*1e3:.0f} um", ""]
+    for v in ('pertooth', 'sw'):
+        r = res[v]
+        lines += [f"{v}:", f"  backlash {r['backlash']:.2f} arcmin | stiffness {r['stiff']:.1f} N*m/arcmin",
+                  f"  loaded teeth >= {r['n_eng']} | windup ripple {r['ripple']:.1f} urad",
+                  f"  tolerance margin: {'OK' if r['margin']>0 else 'JAMMED'}", ""]
     if best is not None:
-        ax.plot(b_of*1e3, b_sh*1e3, '*', color='#d93025', ms=15, label='recommended')
-    ax.set_xlabel('offset [um]'); ax.set_ylabel('shift [um]')
-    ax.set_title(name + '\n(hatched = jams under tolerance)')
-    ax.legend(loc='upper left')
-    fig2.colorbar(im, ax=ax)
-fig2.suptitle('Parameter sweep (pertooth geometry), infeasible-under-tolerance masked')
-fig2.tight_layout()
-fig2.savefig('ModAnalysis_sweep.png', dpi=140)
-print("[OK] ModAnalysis_sweep.png")
+        lines += [f"RECOMMENDED (sweep): offset={b_of:.3f}, shift={b_sh:.3f}",
+                  f"  backlash {rb['backlash']:.2f} arcmin | stiffness {rb['stiff']:.1f} N*m/arcmin"]
+    ax.text(0.02, 0.95, "\n".join(lines), va='top', family='monospace', fontsize=10)
+    fig.suptitle(f'Cycloidal modification analysis - current design (offset={CUR_OFFSET}, shift={CUR_SHIFT})')
+    fig.tight_layout()
+    fig.savefig('ModAnalysis_current.png', dpi=140)
+    print("[OK] ModAnalysis_current.png")
+
+    # 扫描热图
+    fig2, axs = plt.subplots(1, 2, figsize=(13, 5.2))
+    ext = [OFFS[0]*1e3, OFFS[-1]*1e3, SHFS[0]*1e3, SHFS[-1]*1e3]
+    for ax, Z, name, cmap in ((axs[0], BL, 'Backlash [arcmin] (worst over crank)', 'viridis_r'),
+                              (axs[1], ST, 'Torsional stiffness [N*m/arcmin] (worst)', 'viridis')):
+        Zm = np.where(FEAS, Z, np.nan)
+        im = ax.imshow(Zm, origin='lower', extent=ext, aspect='auto', cmap=cmap)
+        ax.contourf(OFFS*1e3, SHFS*1e3, ~FEAS, levels=[0.5, 1.5], colors='none', hatches=['xx'])
+        ax.plot(CUR_OFFSET*1e3, CUR_SHIFT*1e3, 's', color='#d93025', ms=9, mfc='none', mew=2, label='current')
+        if best is not None:
+            ax.plot(b_of*1e3, b_sh*1e3, '*', color='#d93025', ms=15, label='recommended')
+        ax.set_xlabel('offset [um]'); ax.set_ylabel('shift [um]')
+        ax.set_title(name + '\n(hatched = jams under tolerance)')
+        ax.legend(loc='upper left')
+        fig2.colorbar(im, ax=ax)
+    fig2.suptitle('Parameter sweep (pertooth geometry), infeasible-under-tolerance masked')
+    fig2.tight_layout()
+    fig2.savefig('ModAnalysis_sweep.png', dpi=140)
+    print("[OK] ModAnalysis_sweep.png")
+
+if __name__ == '__main__':
+    _main()
