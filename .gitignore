@@ -13,3 +13,9 @@ venv/
 # OS / editor
 Thumbs.db
 .DS_Store
+
+# Playwright preview artifacts (throwaway)
+.playwright-mcp/
+viz-full*.png
+viz-mobile.png
+tooth-panel.png
