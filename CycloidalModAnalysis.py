@@ -20,7 +20,7 @@ T_RATED    = 30.0    # 额定扭矩 [N*m]
 K_CONTACT  = 5.0e4   # 单齿接触线刚度 [N/mm]  ponytail: 线性化Hertz, 相对比较够用; 要绝对值时换Palmgren δ^(10/9)
 TOL_BUDGET = 0.015   # 法向最坏公差叠加 [mm] (针孔位置+针径+齿廓加工+偏心误差)
 NTH        = 8000
-PSI_SAMPLES = np.linspace(0, 2*np.pi/N, 6, endpoint=False)  # 一个齿距内采样曲柄角 -> 波动(丝滑度)
+PSI_SAMPLES = np.linspace(0, 2*np.pi/N, 48, endpoint=False)  # 一个啮合周期内采样曲柄角 -> 传动误差波动(丝滑度); 48点足以分辨高频纹波
 
 TH = np.linspace(0, 2*np.pi, NTH, endpoint=False)
 PIN_XY = np.stack([Rb*np.cos(2*np.pi*np.arange(Np)/Np),
@@ -87,7 +87,8 @@ def play_range(gaps, arms, tol=0.0):
     return lo, hi
 
 def windup(gaps, arms):
-    """额定扭矩下: 返回 (加载转角-初接触角)[rad], 切向刚度[N*mm/rad], 受载齿数, 每齿力[N]"""
+    """额定扭矩下: 返回 (加载后输出转角 b [rad, 相对理想共轭位 β=0], 切向刚度[N*mm/rad], 受载齿数, 每齿力[N])。
+    b = 消隙转角 hi(运动学) + 弹性变形; 其跨曲柄角峰峰值才是真实负载传动误差(丝滑度), 单取弹性部分会漏掉运动学项。"""
     T = T_RATED*1000.0
     _, hi = play_range(gaps, arms)
     def torque(b):
@@ -96,7 +97,9 @@ def windup(gaps, arms):
     b1 = hi + 1e-6
     while torque(b1) < T:
         b1 = hi + 2*(b1-hi)
-        if b1-hi > 0.05: return np.nan, 0.0, 0, np.zeros(Np)
+        if b1-hi > 0.05:   # 额定扭矩下变形超限=承载不足; 返回大有限哨兵值(不用NaN, 避免污染 max/min 与 GA argmax)
+            base = hi if np.isfinite(hi) else 0.0
+            return base + 0.05, 0.0, 0, np.zeros(Np)
     b0 = hi
     for _ in range(60):
         bm = 0.5*(b0+b1)
@@ -105,25 +108,25 @@ def windup(gaps, arms):
     b = 0.5*(b0+b1)
     F = K_CONTACT*np.maximum(0.0, b*arms - gaps)
     eng = F > 0
-    return b - hi, K_CONTACT*np.sum(arms[eng]**2), int(eng.sum()), F
+    return b, K_CONTACT*np.sum(arms[eng]**2), int(eng.sum()), F
 
 def evaluate(offset, shift, variant, s2=0.0):
     """跨曲柄角聚合: 背隙(最坏)[arcmin], 刚度(最差)[N*m/arcmin], 加载转角波动[urad], 公差余量(最小)[arcmin], 最少受载齿数"""
     X, Y = profile(offset, shift, variant, s2=s2)
-    plays, margins, ks, wus, nes = [], [], [], [], []
+    plays, margins, ks, bs, nes = [], [], [], [], []
     for psi in PSI_SAMPLES:
         gaps, arms, _ = mesh_state(X, Y, psi, ROT_SIGN)
         lo, hi = play_range(gaps, arms)
         plays.append(hi-lo)
         tlo, thi = play_range(gaps, arms, TOL_BUDGET)
         margins.append(thi-tlo)
-        wu, k, ne, _ = windup(gaps, arms)
-        ks.append(k); wus.append(wu); nes.append(ne)
+        b, k, ne, _ = windup(gaps, arms)
+        ks.append(k); bs.append(b); nes.append(ne)
     arcmin = 180/np.pi*60
     k_min = np.min(ks)
     return dict(backlash=np.max(plays)*arcmin,
                 stiff=k_min/1e3/arcmin,             # N*m / arcmin
-                ripple=(np.max(wus)-np.min(wus))*1e6,
+                ripple=(np.max(bs)-np.min(bs))*1e6, # 负载传动误差峰峰值 [urad] = 真实丝滑度
                 margin=np.min(margins)*arcmin,      # arcmin
                 n_eng=int(np.min(nes)))
 

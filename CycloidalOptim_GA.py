@@ -14,47 +14,68 @@ import matplotlib.pyplot as plt
 import pygad
 import CycloidalModAnalysis as m
 
-MARGIN_MIN = 0.5    # 公差余量下限 [arcmin], 低于此重罚
-W_RIPPLE   = 0.05   # 波动权重 [1/urad]
-W_STIFF    = 0.10   # 刚度不足25 N*m/arcmin 的惩罚权重
+MARGIN_MIN = 0.5    # 公差余量硬下限 [arcmin]
+STIFF_MIN  = 25.0   # 刚度硬下限 [N*m/arcmin]
+W_RIPPLE   = 0.05   # 波动权重 [1/urad] (真实负载传动误差, 次要目标)
+W_STIFF    = 0.08   # 刚度奖励权重 [arcmin/(N*m)] —— 直接奖励更高刚度(用户要"刚性最强"), 不再只设下限
+SEEDS      = [42] if os.environ.get('QUICK') else [42, 7, 2024]  # 多起点取全局最优, 抗单种子局部最优
 GENS       = 5 if os.environ.get('QUICK') else 80
 GENE_SPACE = [{'low': -0.10, 'high': -0.015},   # offset [mm]
               {'low': -0.04, 'high':  0.04},    # s1 [mm]
               {'low': -0.04, 'high':  0.04}]    # s2 [mm]
 
+def delta_max(offset, s1, s2):
+    """δ(θ)=offset+s1·cos(Nθ)+s2·cos(2Nθ) 的真实最大值(最少去料处)。
+    令 x=cos(Nθ)∈[-1,1], cos(2Nθ)=2x²-1 → δ=2·s2·x²+s1·x+(offset-s2), 端点与顶点取极值。
+    比旧的 offset+|s1|+|s2| 上界更紧, 不会误杀两谐波反相时真正可行的更紧齿廓。"""
+    d = lambda x: 2*s2*x*x + s1*x + (offset - s2)
+    cands = [d(-1.0), d(1.0)]
+    if abs(s2) > 1e-12:
+        xv = -s1/(4*s2)
+        if -1.0 <= xv <= 1.0:
+            cands.append(d(xv))
+    return max(cands)
+
 def cost(offset, s1, s2):
-    dmax = offset + abs(s1) + abs(s2)      # δ 的最大值 (最少去料处)
-    if dmax > -0.005:                      # 必须处处去料>=5um, 梯度化惩罚引导GA离开
-        return 1e3 + 1e5*(dmax + 0.005)
+    if delta_max(offset, s1, s2) > -0.005:   # 必须处处去料>=5um (真实最大值判据)
+        return 1e3 + 1e5*(delta_max(offset, s1, s2) + 0.005)
     r = m.evaluate(offset, s1, 'harmonic', s2=s2)
-    pen = 100.0*max(0.0, MARGIN_MIN - r['margin'])
-    return r['backlash'] + W_RIPPLE*r['ripple'] + W_STIFF*max(0.0, 25.0 - r['stiff']) + pen
+    pen  = 100.0*max(0.0, MARGIN_MIN - r['margin'])   # 公差余量硬约束
+    pen += 100.0*max(0.0, STIFF_MIN  - r['stiff'])    # 刚度硬下限
+    # 目标: 小背隙 + 小传动误差波动 + 高刚度(直接奖励), 在公差与刚度约束内
+    return r['backlash'] + W_RIPPLE*r['ripple'] - W_STIFF*r['stiff'] + pen
 
 def fitness_func(ga, sol, idx):
     return -cost(*sol)
 
 def on_gen(ga):
-    if ga.generations_completed % 10 == 0 or ga.generations_completed == GENS:
-        print(f"  gen {ga.generations_completed:3d}/{GENS}  best cost = {-max(ga.solutions_fitness):.3f}")
+    if ga.generations_completed % 20 == 0 or ga.generations_completed == GENS:
+        print(f"    gen {ga.generations_completed:3d}/{GENS}  best cost = {-max(ga.solutions_fitness):.3f}")
 
-ga = pygad.GA(num_generations=GENS, num_parents_mating=8,
-              fitness_func=fitness_func, sol_per_pop=24, num_genes=3,
-              gene_space=GENE_SPACE, parent_selection_type="rank",
-              crossover_type="single_point", mutation_type="random",
-              mutation_percent_genes=25, random_seed=42,
-              on_generation=on_gen, save_solutions=True, suppress_warnings=True)
-ga.run()
-# 全局最优: 扫描所有已评估解 (ga.best_solution() 只看末代种群, 不可靠)
-sols = np.array(ga.solutions)
-fits = np.array(ga.solutions_fitness)
-best_i = int(np.argmax(fits))
-offset, s1, s2 = sols[best_i]
-fit = fits[best_i]
+# 多起点 GA: 每个种子独立跑, 汇总所有评估解取全局最优 (ga.best_solution() 只看末代种群, 不可靠)
+best = None   # (cost, offset, s1, s2)
+for seed in SEEDS:
+    print(f"[seed {seed}]")
+    ga = pygad.GA(num_generations=GENS, num_parents_mating=8,
+                  fitness_func=fitness_func, sol_per_pop=24, num_genes=3,
+                  gene_space=GENE_SPACE, parent_selection_type="rank",
+                  crossover_type="single_point", mutation_type="random",
+                  mutation_percent_genes=25, random_seed=seed,
+                  on_generation=on_gen, save_solutions=True, suppress_warnings=True)
+    ga.run()
+    sols = np.array(ga.solutions); fits = np.array(ga.solutions_fitness)
+    i = int(np.argmax(fits)); c = float(-fits[i]); o_, s1_, s2_ = sols[i]
+    print(f"    -> cost {c:.3f} at offset={o_:.4f} s1={s1_:.4f} s2={s2_:.4f}")
+    if best is None or c < best[0]:
+        best = (c, float(o_), float(s1_), float(s2_))
+
+_, offset, s1, s2 = best
 r = m.evaluate(offset, s1, 'harmonic', s2=s2)
-print(f"\n[best] offset={offset:.4f}  s1={s1:.4f}  s2={s2:.4f}  (cost={-fit:.3f})")
+print(f"\n[best over {len(SEEDS)} seed(s)] offset={offset:.4f}  s1={s1:.4f}  s2={s2:.4f}  (cost={best[0]:.3f})")
 print(f"  backlash={r['backlash']:.2f} arcmin  stiff={r['stiff']:.1f} N*m/arcmin  "
       f"margin={r['margin']:.2f} arcmin  teeth>={r['n_eng']}  ripple={r['ripple']:.1f} urad")
 assert r['margin'] >= MARGIN_MIN - 1e-6, "GA best violates tolerance margin - widen GENE_SPACE or raise penalty"
+assert r['stiff']  >= STIFF_MIN  - 1e-6, "GA best violates stiffness floor"
 
 # —— SolidWorks 方程导出 (COMPACT 同构, 法向 δ-Rr) ——
 def sw_equations(offset, s1, s2):

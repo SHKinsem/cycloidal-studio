@@ -349,28 +349,30 @@ function playRange(gaps,arms,tol=0){
   return [lo,hi];
 }
 function windup(gaps,arms){
+  // returns absolute loaded output angle b (rad, from ideal conjugate pose); ptp(b) over a
+  // mesh cycle is the true loaded transmission error. b = clearance take-up hi + elastic strain.
   const T=T_RATED*1000.0, hi=playRange(gaps,arms)[1];
   const torque=b=>{let s=0;for(let j=0;j<gaps.length;j++){const p=Math.max(0,b*arms[j]-gaps[j]);s+=K_CONTACT*p*arms[j];}return s;};
   let b1=hi+1e-6;
-  while(torque(b1)<T){ b1=hi+2*(b1-hi); if(b1-hi>0.05) return {wu:NaN,k:0,ne:0,F:gaps.map(()=>0)}; }
+  while(torque(b1)<T){ b1=hi+2*(b1-hi); if(b1-hi>0.05) return {b:(isFinite(hi)?hi:0)+0.05,k:0,ne:0,F:gaps.map(()=>0)}; }
   let b0=hi;
   for(let it=0;it<60;it++){ const bm=0.5*(b0+b1); if(torque(bm)<T) b0=bm; else b1=bm; }
   const b=0.5*(b0+b1), F=gaps.map((g,j)=>K_CONTACT*Math.max(0,b*arms[j]-g));
   let ne=0,k=0; for(let j=0;j<gaps.length;j++) if(F[j]>0){ne++; k+=K_CONTACT*arms[j]**2;}
-  return {wu:b-hi,k,ne,F};
+  return {b,k,ne,F};
 }
 function evaluate(offset,s1,s2,nPts,variant){
-  nPts=nPts||4000;
+  nPts=nPts||8000;   // match Python NTH so the nearest-point search agrees to the displayed digit
   const prof=profile(offset,s1,s2,nPts,variant), arcmin=180/Math.PI*60;
-  const plays=[],margins=[],ks=[],wus=[],nes=[];
-  for(let i=0;i<6;i++){
-    const psi=2*Math.PI/N*i/6, ms=meshState(prof,psi);
+  const plays=[],margins=[],ks=[],bs=[],nes=[];
+  for(let i=0;i<48;i++){   // 48 crank samples over one mesh cycle to resolve the TE ripple
+    const psi=2*Math.PI/N*i/48, ms=meshState(prof,psi);
     const [lo,hi]=playRange(ms.gaps,ms.arms); plays.push(hi-lo);
     const [tlo,thi]=playRange(ms.gaps,ms.arms,TOL); margins.push(thi-tlo);
-    const w=windup(ms.gaps,ms.arms); ks.push(w.k); wus.push(w.wu); nes.push(w.ne);
+    const w=windup(ms.gaps,ms.arms); ks.push(w.k); bs.push(w.b); nes.push(w.ne);
   }
   return { backlash:Math.max(...plays)*arcmin, stiff:Math.min(...ks)/1e3/arcmin,
-           ripple:(Math.max(...wus)-Math.min(...wus))*1e6, margin:Math.min(...margins)*arcmin,
+           ripple:(Math.max(...bs)-Math.min(...bs))*1e6, margin:Math.min(...margins)*arcmin,
            n_eng:Math.min(...nes) };
 }
 // pick rotation sign by conjugacy of the unmodified tooth (mirrors Python self-check);
@@ -446,6 +448,8 @@ const TXT = {
   btn_copyboth: { en:'Copy both', zh:'复制两式' },
   btn_csv:      { en:'Download point-cloud CSV', zh:'下载点云 CSV' },
   copied:       { en:'✓ copied', zh:'✓ 已复制' },
+  tight:        { en:'· tight', zh:'· 偏紧' },
+  jamword:      { en:'· jam', zh:'· 卡死' },
   how:          { en:'In SolidWorks: Insert → Curve → Equation Driven Curve → Parametric. Set t from 0 to 6.28318, paste X(t) and Y(t). Or import the CSV via Insert → Curve → Curve Through XYZ Points, then Fit Spline.',
                   zh:'在 SolidWorks 中：插入 → 曲线 → 方程驱动曲线 → 参数化。设 t 从 0 到 6.28318，粘贴 X(t) 与 Y(t)。或用 插入 → 曲线 → 通过 XYZ 点的曲线 导入 CSV，再用 拟合样条。' },
   c_tip:        { en:'tip', zh:'齿顶' },
@@ -458,14 +462,14 @@ const TXT = {
   footer_note:  { en:'Model: quasi-static, rigid disk, linearised contact (K=50 N/µm per tooth). Trends are faithful; absolute values are order-of-magnitude. Physics ported from CycloidalModAnalysis.py. No lubricant film / dynamics.',
                   zh:'模型：准静态、刚性盘、线性化接触（K=50 N/µm 每齿）。趋势可靠，绝对值为量级估计。物理模型移植自 CycloidalModAnalysis.py，未含油膜与动力学。' },
 };
-const state = { offset:-0.0254, s1:-0.0034, s2:-0.0081, psi:0, playing:true, speed:0.45, exag:40, lang:'en' };
+const state = { offset:-0.0209, s1:-0.0012, s2:-0.0037, psi:0, playing:true, speed:0.45, exag:40, lang:'en' };
 function t(key){ const e=TXT[key]; return e ? (e[state.lang]||e.en) : key; }
 
 // ============================ presets, colors, baseline ============================
 const PRESETS = {
   uniform: { offset:-0.040,  s1:0,       s2:0 },
   deep:    { offset:-0.075,  s1:0,       s2:0 },
-  ga:      { offset:-0.0254, s1:-0.0034, s2:-0.0081 },
+  ga:      { offset:-0.0209, s1:-0.0012, s2:-0.0037 },   // multi-seed GA optimum (stiffness-rewarded objective)
 };
 const css = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
 const COL = {};
@@ -597,7 +601,9 @@ function updateMetrics(){
   set('m-backlash', `${fmt(r.backlash)}<u>′</u> ${deltaTag(r.backlash,BASE&&BASE.backlash,'low')}`);
   set('m-stiff',    `${fmt(r.stiff,1)}<u>N·m/′</u> ${deltaTag(r.stiff,BASE&&BASE.stiff,'high')}`);
   set('m-ripple',   `${fmt(r.ripple,1)}<u>µrad</u> ${deltaTag(r.ripple,BASE&&BASE.ripple,'ripple')}`);
-  set('m-margin',   `${fmt(r.margin)}<u>′</u>`, r.margin<=0?'bad':(r.margin<0.5?'warn':''));
+  const mstate = r.margin<=0?'bad':(r.margin<0.5?'warn':'');
+  const mcue = mstate==='bad'?` <u>${t('jamword')}</u>` : mstate==='warn'?` <u>${t('tight')}</u>` : '';
+  set('m-margin',   `${fmt(r.margin)}<u>′</u>${mcue}`, mstate);
   set('m-teeth',    `${r.n_eng}<u>/ ${Np}</u>`);
   I('jam').classList.toggle('on', r.margin<=0);
 }
@@ -656,7 +662,7 @@ function applyGeometry(){
   rebuildPins();
   ROT_SIGN=pickRotSign();
   I('warn').classList.toggle('on', GEOM_WORST>0.003);
-  BASE=evaluate(-0.075,0.05,0,4000,'pertooth');
+  BASE=evaluate(-0.075,0.05,0,8000,'pertooth');
   I('ratio').textContent=t('mesh_aux').replace('{R}', N);
   afterChange();
 }
@@ -668,7 +674,7 @@ function syncSliders(){
 }
 function rebuildMeshProf(){ meshProf=profile(state.offset,state.s1,state.s2,1440); }
 let mt; function scheduleMetrics(){ clearTimeout(mt); mt=setTimeout(updateMetrics,60); }
-function afterChange(){ syncSliders(); rebuildMeshProf(); drawTooth(); drawClearance(); refreshExport(); scheduleMetrics(); markPreset(); }
+function afterChange(){ syncSliders(); rebuildMeshProf(); drawMesh(); drawTooth(); drawClearance(); refreshExport(); scheduleMetrics(); markPreset(); }
 
 function markPreset(){
   const hit=Object.entries(PRESETS).find(([k,p])=>
@@ -705,6 +711,10 @@ window.addEventListener('resize',()=>{ drawMesh(); drawTooth(); drawClearance();
 applyGeometry();      // sets ROT_SIGN, PINS, BASE, meshProf via afterChange
 applyLang('en');
 refreshExport();
+// honor OS reduced-motion: start paused on a static frame instead of auto-rotating
+if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+  state.playing=false; I('play').textContent=playLabel(); I('play').setAttribute('aria-pressed','false');
+}
 drawMesh();
 requestAnimationFrame(loop);
 </script>

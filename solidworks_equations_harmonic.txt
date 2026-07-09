@@ -1,11 +1,11 @@
 HARMONIC MODIFICATION - SolidWorks Equation Driven Curve (Parametric)
-offset=-0.0254  s1=-0.0034  s2=-0.0081  [mm]
-metrics: backlash=5.22 arcmin, stiffness=33.9 N*m/arcmin, margin=0.68 arcmin @ tol=15 um
+offset=-0.0209  s1=-0.0012  s2=-0.0037  [mm]
+metrics: backlash=5.07 arcmin, stiffness=35.7 N*m/arcmin, margin=0.71 arcmin @ tol=15 um
 
 X(t):
-34.0*cos(t)+1.5*cos(19*t) + ( (-0.0254 + -0.0034*cos(18*t) + -0.0081*cos(36*t)) - 2.5 )*( 34.0*cos(t)+1.5*19*cos(19*t) )/sqrt( (-34.0*sin(t)-1.5*19*sin(19*t))^2 + (34.0*cos(t)+1.5*19*cos(19*t))^2 )
+34.0*cos(t)+1.5*cos(19*t) + ( (-0.0209 + -0.0012*cos(18*t) + -0.0037*cos(36*t)) - 2.5 )*( 34.0*cos(t)+1.5*19*cos(19*t) )/sqrt( (-34.0*sin(t)-1.5*19*sin(19*t))^2 + (34.0*cos(t)+1.5*19*cos(19*t))^2 )
 
 Y(t):
-34.0*sin(t)+1.5*sin(19*t) + ( (-0.0254 + -0.0034*cos(18*t) + -0.0081*cos(36*t)) - 2.5 )*( 34.0*sin(t)+1.5*19*sin(19*t) )/sqrt( (-34.0*sin(t)-1.5*19*sin(19*t))^2 + (34.0*cos(t)+1.5*19*cos(19*t))^2 )
+34.0*sin(t)+1.5*sin(19*t) + ( (-0.0209 + -0.0012*cos(18*t) + -0.0037*cos(36*t)) - 2.5 )*( 34.0*sin(t)+1.5*19*sin(19*t) )/sqrt( (-34.0*sin(t)-1.5*19*sin(19*t))^2 + (34.0*cos(t)+1.5*19*cos(19*t))^2 )
 
 t: 0 .. 6.28318, points: 500

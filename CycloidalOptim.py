@@ -175,9 +175,10 @@ def build_equation_variants(Rb, Rr, E, N, Delta_offset, Delta_shift, theta_max_r
                f"/sqrt((-{Rb}*sin(t) - {E}*{M}*sin({M}*t))^2 + ({Rb}*cos(t) + {E}*{M}*cos({M}*t))^2)) ) + "
                f"({Delta_offset} + {Delta_shift}*{tooth_mod_formula})*((({Rb}*cos(t) + {E}*{M}*cos({M}*t))"
                f"/sqrt((-{Rb}*sin(t) - {E}*{M}*sin({M}*t))^2 + ({Rb}*cos(t) + {E}*{M}*cos({M}*t))^2)) ))")
-    full_y = (f"(({Rb}*sin(t) + {E}*sin({M}*t)) - {Rr}*((-(-{Rb}*sin(t) - {E}*{M}*sin({M}*t)))"
+    # y-法向分量 numerator = (Rb*sin + E*M*sin(M*t)); 用与 full_x 相同的括号结构(避免旧 (-(-...)) 写法的括号失衡)
+    full_y = (f"(({Rb}*sin(t) + {E}*sin({M}*t)) - {Rr}*((({Rb}*sin(t) + {E}*{M}*sin({M}*t))"
                f"/sqrt((-{Rb}*sin(t) - {E}*{M}*sin({M}*t))^2 + ({Rb}*cos(t) + {E}*{M}*cos({M}*t))^2)) ) + "
-               f"({Delta_offset} + {Delta_shift}*{tooth_mod_formula})*((-(-{Rb}*sin(t) - {E}*{M}*sin({M}*t)))"
+               f"({Delta_offset} + {Delta_shift}*{tooth_mod_formula})*((({Rb}*sin(t) + {E}*{M}*sin({M}*t))"
                f"/sqrt((-{Rb}*sin(t) - {E}*{M}*sin({M}*t))^2 + ({Rb}*cos(t) + {E}*{M}*cos({M}*t))^2)) ))")
     
     # SAFE 版本 (使用相同的每齿周期公式)
@@ -185,9 +186,9 @@ def build_equation_variants(Rb, Rr, E, N, Delta_offset, Delta_shift, theta_max_r
                f"/sqrt((-{Rb}*sin(t) - {E}*{M}*sin({M}*t))^2 + ({Rb}*cos(t) + {E}*{M}*cos({M}*t))^2)) ) + "
                f"({Delta_offset} + {Delta_shift}*{tooth_mod_formula})*((({Rb}*cos(t) + {E}*{M}*cos({M}*t))"
                f"/sqrt((-{Rb}*sin(t) - {E}*{M}*sin({M}*t))^2 + ({Rb}*cos(t) + {E}*{M}*cos({M}*t))^2)) ))")
-    safe_y = (f"(({Rb}*sin(t) + {E}*sin({M}*t)) - {Rr}*((-(-{Rb}*sin(t) - {E}*{M}*sin({M}*t)))"
+    safe_y = (f"(({Rb}*sin(t) + {E}*sin({M}*t)) - {Rr}*((({Rb}*sin(t) + {E}*{M}*sin({M}*t))"
                f"/sqrt((-{Rb}*sin(t) - {E}*{M}*sin({M}*t))^2 + ({Rb}*cos(t) + {E}*{M}*cos({M}*t))^2)) ) + "
-               f"({Delta_offset} + {Delta_shift}*{tooth_mod_formula})*((-(-{Rb}*sin(t) - {E}*{M}*sin({M}*t)))"
+               f"({Delta_offset} + {Delta_shift}*{tooth_mod_formula})*((({Rb}*sin(t) + {E}*{M}*sin({M}*t))"
                f"/sqrt((-{Rb}*sin(t) - {E}*{M}*sin({M}*t))^2 + ({Rb}*cos(t) + {E}*{M}*cos({M}*t))^2)) ))")
     
     # COMPACT (推荐): base + (delta - Rr)* normal，使用新的每齿修型
@@ -201,12 +202,17 @@ def build_equation_variants(Rb, Rr, E, N, Delta_offset, Delta_shift, theta_max_r
                  f"/sqrt((-{Rb}*sin(t) - {E}*{M}*sin({M}*t))^2 + ({Rb}*cos(t) + {E}*{M}*cos({M}*t))^2)))")
     minimal_y = (f"{Rb}*sin(t) + {E}*sin({M}*t) - {Rr}*((-(-{Rb}*sin(t) - {E}*{M}*sin({M}*t))"
                  f"/sqrt((-{Rb}*sin(t) - {E}*{M}*sin({M}*t))^2 + ({Rb}*cos(t) + {E}*{M}*cos({M}*t))^2)))")
-    return {
+    variants = {
         'FULL': (full_x, full_y),
         'SAFE': (safe_x, safe_y),
         'COMPACT': (compact_x, compact_y),
         'MINIMAL': (minimal_x, minimal_y)
     }
+    # 括号平衡自检: SolidWorks 会拒收括号不匹配的方程
+    for name, (ex, ey) in variants.items():
+        for axis, eq in (('X', ex), ('Y', ey)):
+            assert eq.count('(') == eq.count(')'), f"{name}_{axis} 括号不平衡: {eq.count('(')} open vs {eq.count(')')} close"
+    return variants
 
 def generate_solidworks_equations():
     """生成SolidWorks等距曲线方程 (带变体选择)"""
@@ -270,9 +276,9 @@ def generate_solidworks_equations():
     print("\n7. MODIFICATION FORMULA:")
     print("-" * 50)
     print("Per-tooth periodic modification using:")
-    print(f"delta(t) = {Delta_offset} + {Delta_shift} * ((1 - cos({N}*t))/2)")
+    print(f"delta(t) = {Delta_offset} + {Delta_shift} * ((1 + cos({N}*t))/2)")
     print(f"This creates {N} periodic modifications matching each tooth")
-    print("Each tooth has minimum delta at tooth center, maximum between teeth")
+    print("Maximum delta (least material removed) at tooth center t=k*2pi/N; minimum between teeth")
     print("Range: [offset, offset+shift] = [{}, {}] mm".format(Delta_offset, Delta_offset + Delta_shift))
     
     print("\n8. SIMPLIFIED BASE (No modification):")
