@@ -1,0 +1,11 @@
+HARMONIC MODIFICATION - SolidWorks Equation Driven Curve (Parametric)
+offset=-0.0381  s1=0.0154  s2=-0.0176  [mm]
+metrics: backlash=6.93 arcmin, stiffness=19.8 N*m/arcmin, margin=1.47 arcmin @ tol=15 um
+
+X(t):
+34.0*cos(t)+1.5*cos(19*t) + ( (-0.0381 + 0.0154*cos(18*t) + -0.0176*cos(36*t)) - 2.5 )*( 34.0*cos(t)+1.5*19*cos(19*t) )/sqrt( (-34.0*sin(t)-1.5*19*sin(19*t))^2 + (34.0*cos(t)+1.5*19*cos(19*t))^2 )
+
+Y(t):
+34.0*sin(t)+1.5*sin(19*t) + ( (-0.0381 + 0.0154*cos(18*t) + -0.0176*cos(36*t)) - 2.5 )*( 34.0*sin(t)+1.5*19*sin(19*t) )/sqrt( (-34.0*sin(t)-1.5*19*sin(19*t))^2 + (34.0*cos(t)+1.5*19*cos(19*t))^2 )
+
+t: 0 .. 6.28318, points: 500
