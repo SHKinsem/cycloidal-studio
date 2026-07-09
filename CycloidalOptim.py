@@ -164,7 +164,10 @@ def build_equation_variants(Rb, Rr, E, N, Delta_offset, Delta_shift, theta_max_r
     # (1 - cos(N*t))/2 范围是 [0, 1]
     # 在齿中心 (t = 2πk/N) 处，cos(N*t) = 1，调制量 = 0
     # 在齿间隙 (t = π(2k+1)/N) 处，cos(N*t) = -1，调制量 = 1
-    tooth_mod_formula = f"((1 - cos({N}*t))/2)"  # 0到1之间周期变化
+    # 与Python逐齿二次修型同相位: 齿顶(t=k*2pi/N)权重=1(去料最少), 齿根=0(去料最多)。
+    # 注意: Python侧修型沿径向、此方程沿法向, 齿腰处仍有 δ·(1-cosβ) 的几微米级残差;
+    # 需要精确一致请改用 CycloidalOptim_GA.py 导出的 harmonic 方程。
+    tooth_mod_formula = f"((1 + cos({N}*t))/2)"
     
     # 公共分母 (法向归一化) 分拆为内联表达（保持与单行兼容）
     # FULL 版本 (使用新的每齿周期修型)
