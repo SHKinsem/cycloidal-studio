@@ -215,6 +215,7 @@
       <div class="field"><label><span data-i18n="lbl_E">eccentricity E</span> <span class="unit">mm</span></label><input id="g-E" type="number" value="1.5" min="0.2" max="6" step="0.1"></div>
       <div class="field"><label><span data-i18n="lbl_N">lobes N</span></label><input id="g-N" type="number" value="18" min="6" max="40" step="1"></div>
       <div class="field"><label><span data-i18n="lbl_tol">tolerance</span> <span class="unit">µm</span></label><input id="g-tol" type="number" value="15" min="1" max="80" step="1"></div>
+      <div class="field"><label><span data-i18n="lbl_mach">mach. error ±</span> <span class="unit">µm</span></label><input id="g-mach" type="number" value="5" min="0" max="20" step="0.5"></div>
       <div class="field"><label><span data-i18n="lbl_T">rated torque</span> <span class="unit">N·m</span></label><input id="g-T" type="number" value="30" min="1" max="500" step="1"></div>
     </div>
     <div class="warnbar" id="warn" data-i18n="warn">Geometry undercuts — the unmodified tooth can't mesh with all pins. Reduce E or increase Rb.</div>
@@ -274,6 +275,7 @@
         <div class="metric"><span class="k"><span data-i18n="m_stiff">stiffness</span><small data-i18n="sub_stiff">torsional, worst crank angle</small></span><span class="v" id="m-stiff"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_ripple">ripple</span><small data-i18n="sub_ripple">wind-up variation = smoothness</small></span><span class="v" id="m-ripple"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_margin">tolerance margin</span><small data-i18n="sub_margin">free play left under the stack</small></span><span class="v" id="m-margin"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_rmargin">robust margin</span><small data-i18n="sub_rmargin">margin at worst machining error</small></span><span class="v" id="m-rmargin"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_teeth">loaded teeth</span><small data-i18n="sub_teeth">sharing the rated torque</small></span><span class="v" id="m-teeth"></span></div>
       </div>
     </div>
@@ -333,7 +335,6 @@
 
   <footer>
     <span data-i18n="footer_read"></span>
-    <div class="note"><a href="pareto.html" style="color:var(--green);text-decoration:none" data-i18n="pareto_link">→ Explore the multi-objective Pareto front (NSGA-II, robust + manufacturable)</a></div>
     <div class="note" data-i18n="footer_note"></div>
   </footer>
 </div>
@@ -342,7 +343,7 @@
 "use strict";
 // ============================ geometry (editable) ============================
 let Rb=34.0, Rr=2.5, E=1.5, N=18, M=N+1, Np=N+1;
-let TOL=0.015, T_RATED=30.0;
+let TOL=0.015, MACH=0.005, T_RATED=30.0;
 const K_CONTACT=5.0e4;
 let ROT_SIGN=-1.0, GEOM_WORST=0;
 let PINS=[];
@@ -411,16 +412,18 @@ function windup(gaps,arms){
 function evaluate(offset,coeffs,nPts,variant){
   nPts=nPts||8000;   // match Python NTH so the nearest-point search agrees to the displayed digit
   const prof=profile(offset,coeffs,nPts,variant), arcmin=180/Math.PI*60;
-  const plays=[],margins=[],ks=[],bs=[],nes=[];
+  const plays=[],margins=[],rmargins=[],ks=[],bs=[],nes=[];
   for(let i=0;i<48;i++){   // 48 crank samples over one mesh cycle to resolve the TE ripple
     const psi=2*Math.PI/N*i/48, ms=meshState(prof,psi);
     const [lo,hi]=playRange(ms.gaps,ms.arms); plays.push(hi-lo);
     const [tlo,thi]=playRange(ms.gaps,ms.arms,TOL); margins.push(thi-tlo);
+    // worst-case machining error +e tightens every gap by e, i.e. an extra e on the tolerance stack
+    const [rlo,rhi]=playRange(ms.gaps,ms.arms,TOL+MACH); rmargins.push(rhi-rlo);
     const w=windup(ms.gaps,ms.arms); ks.push(w.k); bs.push(w.b); nes.push(w.ne);
   }
   return { backlash:Math.max(...plays)*arcmin, stiff:Math.min(...ks)/1e3/arcmin,
            ripple:(Math.max(...bs)-Math.min(...bs))*1e6, margin:Math.min(...margins)*arcmin,
-           n_eng:Math.min(...nes) };
+           rmargin:Math.min(...rmargins)*arcmin, n_eng:Math.min(...nes) };
 }
 // pick rotation sign by conjugacy of the unmodified tooth (mirrors Python self-check);
 // also reports worst residual clearance so we can flag an invalid (undercut) geometry.
@@ -440,14 +443,15 @@ const TXT = {
   eyebrow:      { en:'Cycloidal drive · profile designer', zh:'摆线针轮 · 齿廓设计器' },
   title_main:   { en:'Cycloidal Shape Designer', zh:'摆线齿廓设计器' },
   title_thin:   { en:'— tune it, mesh it, export to SolidWorks', zh:'— 调形、啮合、导出 SolidWorks' },
-  lede:         { en:"Set your drive's geometry, shape the tooth with three modification terms, and read backlash, stiffness and tolerance margin live. Copy the SolidWorks equation when it's right.",
-                  zh:'输入减速器几何参数，用三个修型项塑造齿廓，实时读取背隙、刚度与公差余量。满意后直接复制 SolidWorks 方程。' },
+  lede:         { en:"Set your drive's geometry, shape the tooth with an offset plus four harmonic terms, and read backlash, stiffness and margins live. When you change anything, re-run the built-in optimizer to find the new optimum.",
+                  zh:'输入减速器几何参数，用等距偏置加四阶谐波修型项塑造齿廓，实时读取背隙、刚度与余量。改了任何参数后，重跑内置优化器即可找到新的最优修型。' },
   setup_h:      { en:'Geometry & spec', zh:'几何参数与工况' },
   lbl_Rb:       { en:'pin-circle Rb', zh:'针齿中心圆 Rb' },
   lbl_Rr:       { en:'pin radius Rr', zh:'针齿半径 Rr' },
   lbl_E:        { en:'eccentricity E', zh:'偏心距 E' },
   lbl_N:        { en:'lobes N', zh:'齿数 N' },
   lbl_tol:      { en:'tolerance', zh:'公差叠加' },
+  lbl_mach:     { en:'mach. error ±', zh:'加工误差 ±' },
   lbl_T:        { en:'rated torque', zh:'额定扭矩' },
   warn:         { en:"Geometry undercuts — the unmodified tooth can't mesh with all pins. Reduce E or increase Rb.",
                   zh:'几何根切 —— 未修型齿廓无法与全部针齿共轭啮合。请减小 E 或增大 Rb。' },
@@ -478,6 +482,8 @@ const TXT = {
   sub_ripple:   { en:'wind-up variation = smoothness', zh:'加载转角波动 = 丝滑度' },
   m_margin:     { en:'tolerance margin', zh:'公差余量' },
   sub_margin:   { en:'free play left under the stack', zh:'公差叠加下剩余游隙' },
+  m_rmargin:    { en:'robust margin', zh:'鲁棒余量' },
+  sub_rmargin:  { en:'margin at worst machining error', zh:'最不利加工误差下的余量' },
   m_teeth:      { en:'loaded teeth', zh:'受载齿数' },
   sub_teeth:    { en:'sharing the rated torque', zh:'分担额定扭矩' },
   tooth_h:      { en:'Tooth flank', zh:'齿面' },
@@ -499,10 +505,9 @@ const TXT = {
   copied:       { en:'✓ copied', zh:'✓ 已复制' },
   tight:        { en:'· tight', zh:'· 偏紧' },
   jamword:      { en:'· jam', zh:'· 卡死' },
-  pareto_link:  { en:'→ Or browse the reference Python NSGA-II front (fixed default geometry, K=4 harmonics, robust + manufacturable)',
-                  zh:'→ 或浏览参考用的 Python NSGA-II 前沿 (固定默认几何, K=4 谐波, 鲁棒 + 可加工)' },
+  riskword:     { en:'· jam risk', zh:'· 卡死风险' },
   opt_h:        { en:'Optimize for this geometry', zh:'为当前几何搜索最优' },
-  opt_sub:      { en:'live multi-objective search in your browser', zh:'浏览器内实时多目标搜索' },
+  opt_sub:      { en:'live NSGA-II in your browser · every result survives your machining error', zh:'浏览器内实时 NSGA-II · 所有结果都能抗你设定的加工误差' },
   opt_run:      { en:'◆ Find optimal modifications', zh:'◆ 搜索最优修型' },
   opt_running:  { en:'searching…', zh:'搜索中…' },
   opt_hint:     { en:'Set your geometry above, then search. Click a point to load it into the sliders.',
@@ -669,6 +674,9 @@ function updateMetrics(){
   const mstate = r.margin<=0?'bad':(r.margin<0.5?'warn':'');
   const mcue = mstate==='bad'?` <u>${t('jamword')}</u>` : mstate==='warn'?` <u>${t('tight')}</u>` : '';
   set('m-margin',   `${fmt(r.margin)}<u>′</u>${mcue}`, mstate);
+  const rstate = r.rmargin<=0?'bad':(r.rmargin<0.5?'warn':'');
+  const rcue = rstate==='bad'?` <u>${t('riskword')}</u>` : rstate==='warn'?` <u>${t('tight')}</u>` : '';
+  set('m-rmargin',  `${fmt(r.rmargin)}<u>′</u>${rcue}`, rstate);
   set('m-teeth',    `${r.n_eng}<u>/ ${Np}</u>`);
   I('jam').classList.toggle('on', r.margin<=0);
 }
@@ -724,6 +732,7 @@ function applyGeometry(){
   E =clampNum(+I('g-E').value||1.5, 0.2, 6);
   N =Math.round(clampNum(+I('g-N').value||18, 6, 40)); M=N+1; Np=N+1;
   TOL=clampNum(+I('g-tol').value||15, 1, 80)/1000;
+  MACH=clampNum(+I('g-mach').value||0, 0, 20)/1000;
   T_RATED=clampNum(+I('g-T').value||30, 1, 500);
   rebuildPins();
   ROT_SIGN=pickRotSign();
@@ -751,7 +760,7 @@ document.querySelectorAll('.presets button').forEach(b=>b.addEventListener('clic
 }));
 I('s-offset').addEventListener('input',e=>{ state.offset=clampNum(+e.target.value/1e3,-0.1,-0.015); afterChange(); });
 for(let k=1;k<=NK;k++){ I('s-c'+k).addEventListener('input',e=>{ state.coeffs[k-1]=+e.target.value/1e3; afterChange(); }); }
-['g-Rb','g-Rr','g-E','g-N','g-tol','g-T'].forEach(id=>I(id).addEventListener('input',applyGeometry));
+['g-Rb','g-Rr','g-E','g-N','g-tol','g-mach','g-T'].forEach(id=>I(id).addEventListener('input',applyGeometry));
 
 I('play').addEventListener('click',()=>{ state.playing=!state.playing; I('play').textContent=playLabel(); I('play').setAttribute('aria-pressed',state.playing); });
 I('speed').addEventListener('input',e=>{ state.speed=+e.target.value/100; });
@@ -777,7 +786,7 @@ function invalidateOpt(){ if(!OPT.ran) return; stopWorker(); OPT.running=false; 
 
 // Worker source: physics (K-harmonic) + a proper NSGA-II. Self-contained (Blob) so it works offline / on Pages.
 const WORKER_SRC = `
-var Rb,Rr,E,N,M,Np,TOL,T_RATED,K_CONTACT,ROT,PINS,NK;
+var Rb,Rr,E,N,M,Np,TOL,MACH,T_RATED,K_CONTACT,ROT,PINS,NK;
 function profile(offset,coeffs,nPts){
   var X=new Float64Array(nPts),Y=new Float64Array(nPts),TH=new Float64Array(nPts);
   for(var i=0;i<nPts;i++){ var th=2*Math.PI*i/nPts;
@@ -812,10 +821,11 @@ function windup(gaps,arms){ var T=T_RATED*1000, hi=playRange(gaps,arms)[1];
   return {b:b,k:k,ne:ne,F:F}; }
 function evalFast(offset,coeffs){
   var nPts=1800, ns=14, prof=profile(offset,coeffs,nPts), arcmin=180/Math.PI*60;
-  var plays=[],margins=[],ks=[],bs=[],nes=[], paMax=0;
+  var plays=[],margins=[],rmargins=[],ks=[],bs=[],nes=[], paMax=0;
   for(var i=0;i<ns;i++){ var psi=2*Math.PI/N*i/ns, ms=meshState(prof,psi);
     var pr=playRange(ms.gaps,ms.arms); plays.push(pr[1]-pr[0]);
     var pm=playRange(ms.gaps,ms.arms,TOL); margins.push(pm[1]-pm[0]);
+    var pm2=playRange(ms.gaps,ms.arms,TOL+MACH); rmargins.push(pm2[1]-pm2[0]);
     var w=windup(ms.gaps,ms.arms); ks.push(w.k); bs.push(w.b); nes.push(w.ne);
     var fmax=1e-9; for(var j=0;j<Np;j++) if(w.F[j]>fmax)fmax=w.F[j];
     for(var j=0;j<Np;j++){ if(w.F[j]>0.10*fmax){ var px=PINS[j][0],py=PINS[j][1], nx=px-ms.cpx[j], ny=py-ms.cpy[j], nn=Math.hypot(nx,ny);
@@ -823,7 +833,7 @@ function evalFast(offset,coeffs){
   }
   return { backlash:Math.max.apply(null,plays)*arcmin, stiff:Math.min.apply(null,ks)/1e3/arcmin,
            ripple:(Math.max.apply(null,bs)-Math.min.apply(null,bs))*1e6, margin:Math.min.apply(null,margins)*arcmin,
-           n_eng:Math.min.apply(null,nes), maxPA:paMax };
+           rmargin:Math.min.apply(null,rmargins)*arcmin, n_eng:Math.min.apply(null,nes), maxPA:paMax };
 }
 var LO=[-0.10,-0.04,-0.04,-0.04,-0.04], HI=[-0.015,0.04,0.04,0.04,0.04], D=5, POP=48, GEN=44, SEEDS=[];
 function rnd(a,b){return a+Math.random()*(b-a);}
@@ -832,7 +842,7 @@ function newx(){var x=[];for(var i=0;i<D;i++)x.push(rnd(LO[i],HI[i]));return x;}
 function evalx(x){ var coeffs=x.slice(1), r=evalFast(x[0],coeffs), dmax=x[0];
   for(var i=0;i<coeffs.length;i++)dmax+=Math.abs(coeffs[i]);
   var cv=0; if(dmax>-0.005)cv+=(dmax+0.005)*100; if(!isFinite(r.ripple))cv+=100;
-  if(r.margin<0.05)cv+=(0.05-r.margin); if(r.n_eng<2)cv+=1;
+  if(r.rmargin<0.05)cv+=(0.05-r.rmargin); if(r.n_eng<2)cv+=1;   // robust: must survive worst machining error
   r.f=[r.backlash,-r.stiff,r.ripple,r.maxPA]; r.cv=cv; r.x=x; return r; }
 function dom(a,b){ if(a.cv>0||b.cv>0) return a.cv<b.cv;
   var le=true,lt=false; for(var k=0;k<4;k++){ if(a.f[k]>b.f[k]+1e-12)le=false; if(a.f[k]<b.f[k]-1e-12)lt=true; } return le&&lt; }
@@ -857,7 +867,7 @@ function mutate(x){ for(var i=0;i<D;i++) if(Math.random()<0.25) x[i]=clamp(x[i]+
 function frontOut(pop){ var feas=pop.filter(function(p){return p.cv===0;});
   var nd=feas.filter(function(p,i){ for(var j=0;j<feas.length;j++){ if(j!==i && dom(feas[j],p)) return false; } return true; });
   var out=[]; nd.forEach(function(p){ if(!out.some(function(q){return Math.abs(q.backlash-p.backlash)<0.05 && Math.abs(q.stiff-p.stiff)<0.2;}))
-    out.push({offset:p.x[0],coeffs:p.x.slice(1),backlash:p.backlash,stiff:p.stiff,ripple:p.ripple,maxPA:p.maxPA,margin:p.margin,n_eng:p.n_eng}); });
+    out.push({offset:p.x[0],coeffs:p.x.slice(1),backlash:p.backlash,stiff:p.stiff,ripple:p.ripple,maxPA:p.maxPA,margin:p.margin,rmargin:p.rmargin,n_eng:p.n_eng}); });
   return out; }
 function run(){
   var pop=[];  // seed with known-good designs first, then fill with random exploration
@@ -875,7 +885,7 @@ function run(){
   }
   postMessage({type:'done', pct:100, front:frontOut(pop)});
 }
-onmessage=function(e){ var g=e.data; Rb=g.Rb;Rr=g.Rr;E=g.E;N=g.N;M=g.M;Np=g.Np;TOL=g.TOL;T_RATED=g.T_RATED;K_CONTACT=g.K_CONTACT;ROT=g.ROT;PINS=g.PINS;NK=g.NK;SEEDS=g.SEEDS||[]; run(); };
+onmessage=function(e){ var g=e.data; Rb=g.Rb;Rr=g.Rr;E=g.E;N=g.N;M=g.M;Np=g.Np;TOL=g.TOL;MACH=g.MACH||0;T_RATED=g.T_RATED;K_CONTACT=g.K_CONTACT;ROT=g.ROT;PINS=g.PINS;NK=g.NK;SEEDS=g.SEEDS||[]; run(); };
 `;
 
 function runOptimize(){
@@ -903,7 +913,7 @@ function runOptimize(){
   for(const p of Object.values(PRESETS)) SEEDS.push([p.offset].concat(p.coeffs));
   SEEDS.push([state.offset].concat(state.coeffs.slice(0,NK)));
   for(let off=-0.017; off>=-0.098; off-=0.006){ SEEDS.push([off,-0.0012,-0.0037,0,0]); SEEDS.push([off,0,0,0,0]); }
-  wk.postMessage({ Rb,Rr,E,N,M,Np,TOL,T_RATED,K_CONTACT,ROT:ROT_SIGN, PINS, NK, SEEDS });
+  wk.postMessage({ Rb,Rr,E,N,M,Np,TOL,MACH,T_RATED,K_CONTACT,ROT:ROT_SIGN, PINS, NK, SEEDS });
 }
 function showPick(){
   const el=I('opt-pick'); if(OPT.sel<0||!OPT.front[OPT.sel]){ el.innerHTML=''; return; }
@@ -916,6 +926,7 @@ function showPick(){
     row(t('m_ripple'), d.ripple.toFixed(1)+' µrad')+
     row(paLbl, d.maxPA.toFixed(1)+'°')+
     row(t('m_margin'), d.margin.toFixed(2)+"'")+
+    row(t('m_rmargin'), (d.rmargin!=null?d.rmargin.toFixed(2):'—')+"'")+
     row(t('m_teeth'), d.n_eng+' / '+Np)+
     `<button class="load" id="opt-load">${t('opt_load')}</button>`;
   I('opt-load').onclick=()=>{ state.offset=d.offset; state.coeffs=d.coeffs.slice(); afterChange(); };
