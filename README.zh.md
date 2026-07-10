@@ -4,6 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 ![无需构建](https://img.shields.io/badge/build-none-brightgreen)
+![网页零依赖](https://img.shields.io/badge/web%20deps-none-blue)
 
 *[English → README.md](README.md)*
 
@@ -108,6 +109,33 @@ python model.py             # 单个设计的分析图 → results/
 **B. 零配置。** **Settings → Pages → Deploy from a branch → `main` / root**。
 
 站点地址 `https://<你的用户名>.github.io/<仓库名>/`。`index.html` 是首页,`pareto.html` 从中链接。
+
+---
+
+## 项目结构
+
+```
+index.html              # 齿廓设计器 (打开这个)
+pareto.html             # 帕累托浏览器 (由 optimizer/build_pareto_page.py 生成)
+optimizer/
+  model.py              # 物理核心: 啮合/背隙/刚度/波动/余量 (已验证)
+  objectives.py         # K 谐波齿廓 + 压力角/可加工性/鲁棒性
+  optimize.py           # NSGA-II 多目标 → 帕累托前沿
+  benchmark.py          # 复现文献趋势 (5/5)
+  build_pareto_page.py  # results/pareto_front.csv → ../pareto.html
+  test_model.py         # 单元自检
+  results/              # pareto_front.csv (已提交, 用于重建 pareto.html; 图/txt 可再生, 已 gitignore)
+assets/                 # README 用到的两张截图
+cad/                    # 参考 SolidWorks 零件
+requirements.txt        # numpy, matplotlib, pygad (仅优化器需要)
+```
+
+---
+
+## 参与贡献
+
+欢迎 Issue 和 PR——本项目就是拿来折腾的。好的切入方向: 更高保真的加载齿接触物理、样条/NURBS 参数化选项、
+导出到其他 CAD 格式、或让帕累托浏览器里的几何也可编辑。
 
 ---
 

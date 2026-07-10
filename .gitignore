@@ -23,3 +23,7 @@ Thumbs.db
 
 # Regenerable optimizer figure output (the committed CSV is enough to rebuild pareto.html)
 optimizer/results/*.png
+optimizer/results/*.txt
+
+# Unreferenced photo working folder
+pics/

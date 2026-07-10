@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false  # let production deploys finish (GitHub Pages recommendation)
 
 jobs:
   deploy:

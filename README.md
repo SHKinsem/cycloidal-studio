@@ -139,8 +139,8 @@ optimizer/
   benchmark.py          # reproduces the literature trends (5/5)
   build_pareto_page.py  # results/pareto_front.csv → ../pareto.html
   test_model.py         # unit checks
-  results/              # pareto_front.csv + generated figures/equations
-assets/                 # screenshots and analysis figures
+  results/              # pareto_front.csv (committed — rebuilds pareto.html; figures/txt are regenerable, gitignored)
+assets/                 # the two screenshots used in this README
 cad/                    # reference SolidWorks part
 requirements.txt        # numpy, matplotlib, pygad (only for the optimizer)
 ```
