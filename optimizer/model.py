@@ -1,13 +1,17 @@
 # -*- coding: utf-8 -*-
 """
 摆线盘修型效果定量分析：啮合间隙分布 / 背隙(回差) / 接触齿数 / 扭转刚度 / 公差可行域
-基于 CycloidalOptim.py 的几何 (逐齿二次径向修型)，数值法直接算每根针齿与修型齿廓的真实间隙。
-运行:  python CycloidalModAnalysis.py   -> 输出 ModAnalysis_current.png / ModAnalysis_sweep.png + 终端摘要
+数值法直接算每根针齿与修型齿廓的真实间隙, 是全套工具的物理核心 (被 objectives/optimize/benchmark 复用)。
+运行:  python model.py   -> results/analysis_current.png / results/analysis_sweep.png + 终端摘要
 """
+import os
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
+RESULTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
+os.makedirs(RESULTS, exist_ok=True)
 
 # —— 参数 (与 CycloidalOptim.py 一致) ——
 Rb, Rr, E, N = 34.0, 2.5, 1.5, 18
@@ -234,8 +238,8 @@ def _main():
     ax.text(0.02, 0.95, "\n".join(lines), va='top', family='monospace', fontsize=10)
     fig.suptitle(f'Cycloidal modification analysis - current design (offset={CUR_OFFSET}, shift={CUR_SHIFT})')
     fig.tight_layout()
-    fig.savefig('ModAnalysis_current.png', dpi=140)
-    print("[OK] ModAnalysis_current.png")
+    fig.savefig(os.path.join(RESULTS, 'analysis_current.png'), dpi=140)
+    print("[OK] results/analysis_current.png")
 
     # 扫描热图
     fig2, axs = plt.subplots(1, 2, figsize=(13, 5.2))
@@ -254,8 +258,8 @@ def _main():
         fig2.colorbar(im, ax=ax)
     fig2.suptitle('Parameter sweep (pertooth geometry), infeasible-under-tolerance masked')
     fig2.tight_layout()
-    fig2.savefig('ModAnalysis_sweep.png', dpi=140)
-    print("[OK] ModAnalysis_sweep.png")
+    fig2.savefig(os.path.join(RESULTS, 'analysis_sweep.png'), dpi=140)
+    print("[OK] results/analysis_sweep.png")
 
 if __name__ == '__main__':
     _main()

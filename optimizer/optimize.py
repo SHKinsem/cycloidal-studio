@@ -14,7 +14,10 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import pygad
-import cycloidal_advanced as a
+import objectives as a
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+RESULTS = os.path.join(HERE, "results"); os.makedirs(RESULTS, exist_ok=True)
 
 MARGIN_MIN = 0.5
 NPS_FAST, NPTS_FAST = 24, 4000     # 优化时降精度加速; 最终前沿全精度复核
@@ -88,7 +91,7 @@ front = [full[i] for i in front_idx]
 print(f"Pareto front size (full-fidelity, feasible) = {len(front)}")
 
 # —— 保存前沿 CSV ——
-with open("pareto_front.csv", "w") as f:
+with open(os.path.join(RESULTS, "pareto_front.csv"), "w") as f:
     f.write("offset,c1,c2,c3,c4,backlash_arcmin,stiff_Nm_per_arcmin,ripple_urad,max_pressure_angle_deg,worst_margin_arcmin,min_curv_radius_mm,n_eng\n")
     for p, r in sorted(front, key=lambda t: t[1]['backlash']):
         f.write(f"{p[0]:.5f},{p[1]:.5f},{p[2]:.5f},{p[3]:.5f},{p[4]:.5f},"
@@ -121,7 +124,7 @@ if front:
     ax.set_ylabel('torsional stiffness [N*m/arcmin]  (higher better)')
     ax.set_title(f'Pareto front — {K}-harmonic NSGA-II ({len(front)} designs)\ncolor = pressure angle; robust margin>=0.5\', manufacturable')
     ax.legend(); ax.grid(alpha=0.3)
-    fig.tight_layout(); fig.savefig("ParetoFront.png", dpi=140)
+    fig.tight_layout(); fig.savefig(os.path.join(RESULTS, "ParetoFront.png"), dpi=140)
     print("[OK] ParetoFront.png")
 
     # —— 膝点 SolidWorks 方程导出 (K 谐波) ——
@@ -135,7 +138,7 @@ if front:
         y = f"{g(Rb)}*sin(t)+{g(E)}*sin({Mm}*t) + ( {d} - {g(Rr)} )*( {g(Rb)}*sin(t)+{g(E)}*{Mm}*sin({Mm}*t) )/{den}"
         return x, y
     xeq, yeq = sw_eq(kp[0], list(kp[1:]))
-    with open("solidworks_equations_pareto.txt", "w", encoding="utf-8") as f:
+    with open(os.path.join(RESULTS, "solidworks_equations_pareto.txt"), "w", encoding="utf-8") as f:
         f.write("PARETO KNEE — %d-harmonic modification, SolidWorks Equation Driven Curve\n" % K)
         f.write(f"offset={kp[0]:.5f}  c=[{kp[1]:.5f},{kp[2]:.5f},{kp[3]:.5f},{kp[4]:.5f}] mm\n")
         f.write(f"metrics: backlash={kr['backlash']:.2f}' stiff={kr['stiff']:.1f} ripple={kr['ripple']:.1f}urad "

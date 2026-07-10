@@ -8,7 +8,7 @@
     p = [offset, c1, c2, ..., cK]   (K=2 时退化为原 harmonic 的 s1,s2)
 """
 import numpy as np
-import CycloidalModAnalysis as m
+import model as m
 
 Rb, Rr, E, N, M, Np = m.Rb, m.Rr, m.E, m.N, m.M, m.Np
 TH, TOL, ROT = m.TH, m.TOL_BUDGET, m.ROT_SIGN
@@ -145,7 +145,7 @@ def evaluate_robust(offset, coeffs, err=None, nps=None, nPts=None):
 if __name__ == '__main__':
     # 自检: K=2 [s1,s2] 应与基础 evaluate 一致
     r_adv = evaluate_design(-0.0209, [-0.0012, -0.0037])
-    r_base = m.evaluate(-0.0209, -0.0012, 'harmonic', s2=-0.0037)
+    r_base = m.evaluate(-0.0209, -0.0012, 'harmonic', s2=-0.0037)  # parity check
     print("[parity K=2 vs base]")
     for key in ('backlash','stiff','ripple','margin','n_eng'):
         a, b = r_adv[key], r_base[key]

@@ -16,6 +16,7 @@ Thumbs.db
 
 # Playwright preview artifacts (throwaway)
 .playwright-mcp/
-viz-full*.png
-viz-mobile.png
-tooth-panel.png
+*-preview.png
+
+# Claude Code local state
+.claude/

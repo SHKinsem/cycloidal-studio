@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # 运行: python test_cycloidal.py   (无pytest依赖, assert式自检)
 import numpy as np
-import CycloidalModAnalysis as m
+import model as m
 
 def test_conjugate():
     """无修型齿廓必须与19针全部同时接触(共轭性, 管线正确性基线)"""

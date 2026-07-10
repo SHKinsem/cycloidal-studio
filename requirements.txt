@@ -1,0 +1,5 @@
+# Only needed to RE-RUN the optimizer. The web tools (index.html, pareto.html)
+# need nothing — just open them in a browser.
+numpy>=1.24
+matplotlib>=3.7
+pygad>=3.3

@@ -9,8 +9,8 @@
  [D] 加载齿接触: 扭矩越大, 弹性挤入使更多齿参与承载(受载齿数随扭矩增加)。
 """
 import numpy as np
-import CycloidalModAnalysis as m
-import cycloidal_advanced as a
+import model as m
+import objectives as a
 
 def line(): print("-"*70)
 PASS = []
