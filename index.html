@@ -75,10 +75,10 @@
   /* ---- layout ---- */
   .grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 16px; }
   @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; position: relative; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; position: relative; min-width: 0; }
   .full { grid-column: 1 / -1; }
 
-  canvas { display: block; width: 100%; }
+  canvas { display: block; width: 100%; max-width: 100%; min-width: 0; }
   #stage { aspect-ratio: 1 / 1; }
   #tooth { aspect-ratio: 16 / 9; }
   #clr   { aspect-ratio: 21 / 8; }
