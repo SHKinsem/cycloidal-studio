@@ -241,7 +241,7 @@
 
     <!-- modification + metrics -->
     <div class="panel">
-      <h2><span data-i18n="mod_h">Modification</span> <span class="aux">δ(θ)=offset + s1·cos(Nθ) + s2·cos(2Nθ)</span></h2>
+      <h2><span data-i18n="mod_h">Modification</span> <span class="aux">δ(θ)=offset + Σ cₖ·cos(kNθ)</span></h2>
       <div class="presets">
         <button data-k="uniform"><span data-i18n="preset_uniform">uniform</span> −40</button>
         <button data-k="deep"><span data-i18n="preset_deep">deep</span> −75</button>
@@ -253,12 +253,20 @@
         <input type="range" id="s-offset" min="-100" max="-15" step="0.1" aria-label="offset">
       </div>
       <div class="ctl">
-        <div class="row"><span class="name">s1 <span class="desc" data-i18n="desc_s1">tip ↔ root bias</span></span><span class="val" id="v-s1"></span></div>
-        <input type="range" id="s-s1" min="-40" max="40" step="0.1" aria-label="s1">
+        <div class="row"><span class="name">c1 <span class="desc" data-i18n="desc_c1">tip ↔ root bias</span></span><span class="val" id="v-c1"></span></div>
+        <input type="range" id="s-c1" min="-40" max="40" step="0.1" aria-label="c1">
       </div>
       <div class="ctl">
-        <div class="row"><span class="name">s2 <span class="desc" data-i18n="desc_s2">mid-flank (reverse-bow)</span></span><span class="val" id="v-s2"></span></div>
-        <input type="range" id="s-s2" min="-40" max="40" step="0.1" aria-label="s2">
+        <div class="row"><span class="name">c2 <span class="desc" data-i18n="desc_c2">mid-flank (reverse-bow)</span></span><span class="val" id="v-c2"></span></div>
+        <input type="range" id="s-c2" min="-40" max="40" step="0.1" aria-label="c2">
+      </div>
+      <div class="ctl">
+        <div class="row"><span class="name">c3 <span class="desc" data-i18n="desc_c3">flank fine shape</span></span><span class="val" id="v-c3"></span></div>
+        <input type="range" id="s-c3" min="-40" max="40" step="0.1" aria-label="c3">
+      </div>
+      <div class="ctl">
+        <div class="row"><span class="name">c4 <span class="desc" data-i18n="desc_c4">flank fine shape</span></span><span class="val" id="v-c4"></span></div>
+        <input type="range" id="s-c4" min="-40" max="40" step="0.1" aria-label="c4">
       </div>
 
       <div class="metrics">
@@ -341,20 +349,22 @@ let PINS=[];
 function rebuildPins(){ PINS=[]; for(let j=0;j<Np;j++) PINS.push([Rb*Math.cos(2*Math.PI*j/Np), Rb*Math.sin(2*Math.PI*j/Np)]); }
 
 // ============================ physics (port of optimizer/model.py) ============================
-function profile(offset,s1,s2,nPts,variant){
-  variant=variant||'harmonic';
+// coeffs = [c1,c2,...,cK] harmonic amplitudes; δ(θ)=offset + Σ c_k·cos(kNθ) (normal modification).
+// 'pertooth' uses coeffs[0] as the legacy radial quadratic "shift" (reference curve only).
+function profile(offset,coeffs,nPts,variant){
+  variant=variant||'harmonic'; coeffs=coeffs||[];
   const X=new Float64Array(nPts),Y=new Float64Array(nPts),TH=new Float64Array(nPts), tp=2*Math.PI/N;
   for(let i=0;i<nPts;i++){
     const th=2*Math.PI*i/nPts;
     const xc=Rb*Math.cos(th)+E*Math.cos(M*th), yc=Rb*Math.sin(th)+E*Math.sin(M*th);
     const dx=-Rb*Math.sin(th)-E*M*Math.sin(M*th), dy=Rb*Math.cos(th)+E*M*Math.cos(M*th);
     const nn=Math.hypot(dx,dy), nx=dy/nn, ny=-dx/nn; TH[i]=th;
-    if(variant==='pertooth'){          // legacy radial per-tooth quadratic (s1 slot = shift)
+    if(variant==='pertooth'){
       const xs=xc-Rr*nx, ys=yc-Rr*ny, ph=((th%tp)+tp)%tp-tp/2;
-      const d=offset+s1*(ph/(tp/2))**2, r=Math.hypot(xs,ys);
+      const d=offset+(coeffs[0]||0)*(ph/(tp/2))**2, r=Math.hypot(xs,ys);
       X[i]=xs+d*xs/r; Y[i]=ys+d*ys/r;
-    } else {                           // harmonic normal modification
-      const d=offset+s1*Math.cos(N*th)+s2*Math.cos(2*N*th);
+    } else {
+      let d=offset; for(let k=0;k<coeffs.length;k++) d+=coeffs[k]*Math.cos((k+1)*N*th);
       X[i]=xc+(d-Rr)*nx; Y[i]=yc+(d-Rr)*ny;
     }
   }
@@ -398,9 +408,9 @@ function windup(gaps,arms){
   let ne=0,k=0; for(let j=0;j<gaps.length;j++) if(F[j]>0){ne++; k+=K_CONTACT*arms[j]**2;}
   return {b,k,ne,F};
 }
-function evaluate(offset,s1,s2,nPts,variant){
+function evaluate(offset,coeffs,nPts,variant){
   nPts=nPts||8000;   // match Python NTH so the nearest-point search agrees to the displayed digit
-  const prof=profile(offset,s1,s2,nPts,variant), arcmin=180/Math.PI*60;
+  const prof=profile(offset,coeffs,nPts,variant), arcmin=180/Math.PI*60;
   const plays=[],margins=[],ks=[],bs=[],nes=[];
   for(let i=0;i<48;i++){   // 48 crank samples over one mesh cycle to resolve the TE ripple
     const psi=2*Math.PI/N*i/48, ms=meshState(prof,psi);
@@ -415,7 +425,7 @@ function evaluate(offset,s1,s2,nPts,variant){
 // pick rotation sign by conjugacy of the unmodified tooth (mirrors Python self-check);
 // also reports worst residual clearance so we can flag an invalid (undercut) geometry.
 function pickRotSign(){
-  const prof=profile(0,0,0,2000,'harmonic');
+  const prof=profile(0,[],2000,'harmonic');
   let bestSign=-1, bestWorst=Infinity;
   for(const s of [-1,1]){
     let worst=0;
@@ -456,8 +466,10 @@ const TXT = {
   preset_ga:    { en:'GA optimum', zh:'GA 最优' },
   lbl_offset:   { en:'offset', zh:'等距量' },
   desc_offset:  { en:'even removal', zh:'均匀去料' },
-  desc_s1:      { en:'tip ↔ root bias', zh:'齿顶↔齿根偏置' },
-  desc_s2:      { en:'mid-flank (reverse-bow)', zh:'齿腰（反弓）' },
+  desc_c1:      { en:'tip ↔ root bias', zh:'齿顶↔齿根偏置' },
+  desc_c2:      { en:'mid-flank (reverse-bow)', zh:'齿腰（反弓）' },
+  desc_c3:      { en:'flank fine shape', zh:'齿面细部' },
+  desc_c4:      { en:'flank fine shape', zh:'齿面细部' },
   m_backlash:   { en:'backlash', zh:'背隙' },
   sub_backlash: { en:'lost motion, worst crank angle', zh:'空回，最差曲柄角' },
   m_stiff:      { en:'stiffness', zh:'刚度' },
@@ -514,14 +526,15 @@ const TXT = {
   footer_note:  { en:'Model: quasi-static, rigid disk, linearised contact (K=50 N/µm per tooth). Trends are faithful; absolute values are order-of-magnitude. Physics ported from optimizer/model.py. No lubricant film / dynamics.',
                   zh:'模型：准静态、刚性盘、线性化接触（K=50 N/µm 每齿）。趋势可靠，绝对值为量级估计。物理模型移植自 optimizer/model.py，未含油膜与动力学。' },
 };
-const state = { offset:-0.0209, s1:-0.0012, s2:-0.0037, psi:0, playing:true, speed:0.45, exag:40, lang:'en' };
+const NK = 4;   // number of harmonics in the modification δ(θ)=offset+Σ_{k=1}^{NK} c_k·cos(kNθ)
+const state = { offset:-0.0483, coeffs:[-0.0239,-0.0166,-0.0107,-0.0035], psi:0, playing:true, speed:0.45, exag:40, lang:'en' };
 function t(key){ const e=TXT[key]; return e ? (e[state.lang]||e.en) : key; }
 
 // ============================ presets, colors, baseline ============================
 const PRESETS = {
-  uniform: { offset:-0.040,  s1:0,       s2:0 },
-  deep:    { offset:-0.075,  s1:0,       s2:0 },
-  ga:      { offset:-0.0209, s1:-0.0012, s2:-0.0037 },   // multi-seed GA optimum (stiffness-rewarded objective)
+  uniform: { offset:-0.040,  coeffs:[0,0,0,0] },
+  deep:    { offset:-0.075,  coeffs:[0,0,0,0] },
+  ga:      { offset:-0.0483, coeffs:[-0.0239,-0.0166,-0.0107,-0.0035] },   // Python K=4 NSGA-II knee
 };
 const css = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
 const COL = {};
@@ -579,7 +592,7 @@ function drawTooth(){
     const xc=Rb*Math.cos(th)+E*Math.cos(M*th), yc=Rb*Math.sin(th)+E*Math.sin(M*th);
     const dx=-Rb*Math.sin(th)-E*M*Math.sin(M*th), dy=Rb*Math.cos(th)+E*M*Math.cos(M*th);
     const nn=Math.hypot(dx,dy), nx=dy/nn, ny=-dx/nn;
-    const d=state.offset+state.s1*Math.cos(N*th)+state.s2*Math.cos(2*N*th);
+    let d=state.offset; for(let kk=0;kk<state.coeffs.length;kk++) d+=state.coeffs[kk]*Math.cos((kk+1)*N*th);
     const bxr=xc-Rr*nx, byr=yc-Rr*ny, mxr=xc-Rr*nx+d*ex*nx, myr=yc-Rr*ny+d*ex*ny;
     bx.push(-byr); by.push(bxr); mx.push(-myr); my.push(mxr);  // rotate tip-up
   }
@@ -602,8 +615,8 @@ function drawTooth(){
 
 // ---- clearance ----
 const clr=I('clr');
-function clearanceCurve(offset,s1,s2,variant){
-  const prof=profile(offset,s1,s2,4000,variant), ms=meshState(prof,0);
+function clearanceCurve(offset,coeffs,variant){
+  const prof=profile(offset,coeffs,4000,variant), ms=meshState(prof,0);
   const idx=[...ms.uu.keys()].sort((a,b)=>ms.uu[a]-ms.uu[b]);
   return idx.map(j=>[ms.uu[j], ms.gaps[j]*1e3]);
 }
@@ -612,9 +625,9 @@ function drawClearance(){
   ctx.clearRect(0,0,w,h);
   const padL=50, padR=14, padT=14, padB=28;
   const series=[
-    ['shipped', ()=>clearanceCurve(-0.075,0.05,0,'pertooth'),                COL.blue,   1.5],
-    ['uniform', ()=>clearanceCurve(-0.040,0,0,'harmonic'),                   COL.orange, 1.5],
-    ['yours',   ()=>clearanceCurve(state.offset,state.s1,state.s2,'harmonic'), COL.green, 2.4],
+    ['shipped', ()=>clearanceCurve(-0.075,[0.05],'pertooth'),                COL.blue,   1.5],
+    ['uniform', ()=>clearanceCurve(-0.040,[0,0,0,0],'harmonic'),             COL.orange, 1.5],
+    ['yours',   ()=>clearanceCurve(state.offset,state.coeffs,'harmonic'),    COL.green, 2.4],
   ].map(([n,f,c,wd])=>({n,c,wd,data:f()}));
   let ymin=10, ymax=Math.max(20, TOL*1e3+5);
   for(const s of series) for(const d of s.data){ ymin=Math.min(ymin,d[1]); ymax=Math.max(ymax,d[1]); }
@@ -648,7 +661,7 @@ function deltaTag(now, base, better){
   return `<span class="delta ${good?'up':'down'}">${d>0?'▲':'▼'}${Math.abs(d).toFixed(better==='ripple'?0:1)}</span>`;
 }
 function updateMetrics(){
-  const r=evaluate(state.offset,state.s1,state.s2);
+  const r=evaluate(state.offset,state.coeffs);
   const set=(id,html,cls)=>{ const el=I(id); el.innerHTML=html; el.className='v'+(cls?' '+cls:''); };
   set('m-backlash', `${fmt(r.backlash)}<u>′</u> ${deltaTag(r.backlash,BASE&&BASE.backlash,'low')}`);
   set('m-stiff',    `${fmt(r.stiff,1)}<u>N·m/′</u> ${deltaTag(r.stiff,BASE&&BASE.stiff,'high')}`);
@@ -663,8 +676,8 @@ function updateMetrics(){
 // ============================ SolidWorks export ============================
 const g = x => String(Math.round(x*1e6)/1e6);
 function swEquations(){
-  const o=state.offset, s1=state.s1, s2=state.s2;
-  const d=`(${g(o)} + ${g(s1)}*cos(${N}*t) + ${g(s2)}*cos(${2*N}*t))`;
+  const dterms=state.coeffs.map((c,k)=>`${g(c)}*cos(${(k+1)*N}*t)`).join(' + ');
+  const d=`(${g(state.offset)} + ${dterms})`;
   const den=`sqrt( (-${g(Rb)}*sin(t)-${g(E)}*${M}*sin(${M}*t))^2 + (${g(Rb)}*cos(t)+${g(E)}*${M}*cos(${M}*t))^2 )`;
   const X=`${g(Rb)}*cos(t)+${g(E)}*cos(${M}*t) + ( ${d} - ${g(Rr)} )*( ${g(Rb)}*cos(t)+${g(E)}*${M}*cos(${M}*t) )/${den}`;
   const Y=`${g(Rb)}*sin(t)+${g(E)}*sin(${M}*t) + ( ${d} - ${g(Rr)} )*( ${g(Rb)}*sin(t)+${g(E)}*${M}*sin(${M}*t) )/${den}`;
@@ -682,7 +695,7 @@ function copyText(txt, btn){
 }
 function fallbackCopy(txt,ok){ const ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} document.body.removeChild(ta); ok(); }
 function downloadCSV(){
-  const prof=profile(state.offset,state.s1,state.s2,4000,'harmonic');
+  const prof=profile(state.offset,state.coeffs,4000,'harmonic');
   let s="X,Y,Z\n"; for(let i=0;i<prof.X.length;i+=20) s+=`${prof.X[i].toFixed(6)},${prof.Y[i].toFixed(6)},0.000000\n`;
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([s],{type:'text/csv'}));
   a.download=`cycloid_Rb${g(Rb)}_N${N}_off${g(state.offset*1e3)}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
@@ -715,32 +728,29 @@ function applyGeometry(){
   rebuildPins();
   ROT_SIGN=pickRotSign();
   I('warn').classList.toggle('on', GEOM_WORST>0.003);
-  BASE=evaluate(-0.075,0.05,0,8000,'pertooth');
+  BASE=evaluate(-0.075,[0.05],8000,'pertooth');
   I('ratio').textContent=t('mesh_aux').replace('{R}', N);
   invalidateOpt();      // the current front was for the old geometry
   afterChange();
 }
 function syncSliders(){
-  I('s-offset').value=state.offset*1e3; I('s-s1').value=state.s1*1e3; I('s-s2').value=state.s2*1e3;
-  I('v-offset').textContent=(state.offset*1e3).toFixed(1)+' µm';
-  I('v-s1').textContent=(state.s1*1e3).toFixed(1)+' µm';
-  I('v-s2').textContent=(state.s2*1e3).toFixed(1)+' µm';
+  I('s-offset').value=state.offset*1e3; I('v-offset').textContent=(state.offset*1e3).toFixed(1)+' µm';
+  for(let k=1;k<=NK;k++){ I('s-c'+k).value=(state.coeffs[k-1]||0)*1e3; I('v-c'+k).textContent=((state.coeffs[k-1]||0)*1e3).toFixed(1)+' µm'; }
 }
-function rebuildMeshProf(){ meshProf=profile(state.offset,state.s1,state.s2,1440); }
+function rebuildMeshProf(){ meshProf=profile(state.offset,state.coeffs,1440); }
 let mt; function scheduleMetrics(){ clearTimeout(mt); mt=setTimeout(updateMetrics,60); }
 function afterChange(){ syncSliders(); rebuildMeshProf(); drawMesh(); drawTooth(); drawClearance(); refreshExport(); scheduleMetrics(); markPreset(); }
 
 function markPreset(){
   const hit=Object.entries(PRESETS).find(([k,p])=>
-    Math.abs(p.offset-state.offset)<1e-6 && Math.abs(p.s1-state.s1)<1e-6 && Math.abs(p.s2-state.s2)<1e-6);
+    Math.abs(p.offset-state.offset)<1e-6 && p.coeffs.every((c,i)=>Math.abs(c-(state.coeffs[i]||0))<1e-6));
   document.querySelectorAll('.presets button').forEach(b=>b.classList.toggle('active', !!hit && b.dataset.k===hit[0]));
 }
 document.querySelectorAll('.presets button').forEach(b=>b.addEventListener('click',()=>{
-  const p=PRESETS[b.dataset.k]; state.offset=p.offset; state.s1=p.s1; state.s2=p.s2; afterChange();
+  const p=PRESETS[b.dataset.k]; state.offset=p.offset; state.coeffs=p.coeffs.slice(); afterChange();
 }));
 I('s-offset').addEventListener('input',e=>{ state.offset=clampNum(+e.target.value/1e3,-0.1,-0.015); afterChange(); });
-I('s-s1').addEventListener('input',e=>{ state.s1=+e.target.value/1e3; afterChange(); });
-I('s-s2').addEventListener('input',e=>{ state.s2=+e.target.value/1e3; afterChange(); });
+for(let k=1;k<=NK;k++){ I('s-c'+k).addEventListener('input',e=>{ state.coeffs[k-1]=+e.target.value/1e3; afterChange(); }); }
 ['g-Rb','g-Rr','g-E','g-N','g-tol','g-T'].forEach(id=>I(id).addEventListener('input',applyGeometry));
 
 I('play').addEventListener('click',()=>{ state.playing=!state.playing; I('play').textContent=playLabel(); I('play').setAttribute('aria-pressed',state.playing); });
@@ -752,71 +762,137 @@ I('dl-csv').addEventListener('click',downloadCSV);
 I('lang-en').addEventListener('click',()=>applyLang('en'));
 I('lang-zh').addEventListener('click',()=>applyLang('zh'));
 
-// ============================ in-browser optimizer (live, current geometry) ============================
-const OPT = { front:[], sel:-1, running:false, ran:false, pts:[] };
-// fast, reduced-resolution evaluate incl. pressure angle (uses meshState contact points)
-function evalFast(offset,s1,s2){
-  const nPts=2200, ns=16, prof=profile(offset,s1,s2,nPts,'harmonic'), arcmin=180/Math.PI*60;
-  const plays=[],margins=[],ks=[],bs=[],nes=[]; let paMax=0;
-  for(let i=0;i<ns;i++){
-    const psi=2*Math.PI/N*i/ns, ms=meshState(prof,psi);
-    const [lo,hi]=playRange(ms.gaps,ms.arms); plays.push(hi-lo);
-    const [tlo,thi]=playRange(ms.gaps,ms.arms,TOL); margins.push(thi-tlo);
-    const w=windup(ms.gaps,ms.arms); ks.push(w.k); bs.push(w.b); nes.push(w.ne);
-    let fmax=1e-9; for(let j=0;j<Np;j++) if(w.F[j]>fmax) fmax=w.F[j];
-    for(let j=0;j<Np;j++){ if(w.F[j]>0.10*fmax){
-      const px=PINS[j][0],py=PINS[j][1], nx=px-ms.cpx[j], ny=py-ms.cpy[j], nn=Math.hypot(nx,ny);
-      if(nn>1e-9){ const phi=Math.atan2(py,px), c=Math.abs((nx/nn)*(-Math.sin(phi))+(ny/nn)*Math.cos(phi));
-        const a=Math.acos(Math.min(1,Math.max(0,c)))*180/Math.PI; if(a>paMax) paMax=a; } }
-    }
-  }
-  return { offset,s1,s2, backlash:Math.max(...plays)*arcmin, stiff:Math.min(...ks)/1e3/arcmin,
-           ripple:(Math.max(...bs)-Math.min(...bs))*1e6, margin:Math.min(...margins)*arcmin,
-           n_eng:Math.min(...nes), maxPA:paMax };
-}
-const dom4=(a,b)=>{ const A=[a.backlash,-a.stiff,a.ripple,a.maxPA], B=[b.backlash,-b.stiff,b.ripple,b.maxPA];
-  let le=true,lt=false; for(let k=0;k<4;k++){ if(A[k]>B[k]+1e-9)le=false; if(A[k]<B[k]-1e-9)lt=true; } return le&&lt; };
+// ============================ in-browser optimizer: NSGA-II in a Web Worker ============================
+const OPT = { front:[], sel:-1, running:false, ran:false, pts:[], worker:null };
 function kneeIndex(F){
   const col=k=>F.map(d=>d[k]); const nn=(x,lo)=>{const mn=Math.min(...x),mx=Math.max(...x),rg=(mx-mn)||1;return x.map(v=>lo?(v-mn)/rg:(mx-v)/rg);};
   const nb=nn(col('backlash'),true), nsf=nn(col('stiff'),false), nr=nn(col('ripple'),true), npa=nn(col('maxPA'),true);
   let bi=0,bd=1e9; for(let i=0;i<F.length;i++){const d=nb[i]**2+nsf[i]**2+nr[i]**2+npa[i]**2; if(d<bd){bd=d;bi=i;}} return bi;
 }
-function invalidateOpt(){ if(!OPT.ran) return; OPT.front=[]; OPT.sel=-1; I('opt-stat').textContent=t('opt_stale'); I('opt-pick').innerHTML=''; drawOptPlot(); }
+function stopWorker(){ if(OPT.worker){ OPT.worker.terminate(); OPT.worker=null; } }
+function invalidateOpt(){ if(!OPT.ran) return; stopWorker(); OPT.running=false; OPT.front=[]; OPT.sel=-1;
+  const b=I('opt-run'); b.disabled=false; b.textContent=t('opt_run'); I('opt-stat').textContent=t('opt_stale'); I('opt-pick').innerHTML=''; drawOptPlot(); }
 
-async function runOptimize(){
+// Worker source: physics (K-harmonic) + a proper NSGA-II. Self-contained (Blob) so it works offline / on Pages.
+const WORKER_SRC = `
+var Rb,Rr,E,N,M,Np,TOL,T_RATED,K_CONTACT,ROT,PINS,NK;
+function profile(offset,coeffs,nPts){
+  var X=new Float64Array(nPts),Y=new Float64Array(nPts),TH=new Float64Array(nPts);
+  for(var i=0;i<nPts;i++){ var th=2*Math.PI*i/nPts;
+    var xc=Rb*Math.cos(th)+E*Math.cos(M*th), yc=Rb*Math.sin(th)+E*Math.sin(M*th);
+    var dx=-Rb*Math.sin(th)-E*M*Math.sin(M*th), dy=Rb*Math.cos(th)+E*M*Math.cos(M*th);
+    var nn=Math.hypot(dx,dy), nx=dy/nn, ny=-dx/nn; TH[i]=th;
+    var d=offset; for(var k=0;k<coeffs.length;k++) d+=coeffs[k]*Math.cos((k+1)*N*th);
+    X[i]=xc+(d-Rr)*nx; Y[i]=yc+(d-Rr)*ny; }
+  return {X:X,Y:Y,TH:TH};
+}
+function meshState(prof,psi){
+  var X=prof.X,Y=prof.Y,n=X.length;
+  var cx=-E*Math.cos(psi), cy=-E*Math.sin(psi), a=ROT*psi/N, co=Math.cos(a), si=Math.sin(a);
+  var WX=new Float64Array(n), WY=new Float64Array(n);
+  for(var i=0;i<n;i++){ WX[i]=co*X[i]-si*Y[i]+cx; WY[i]=si*X[i]+co*Y[i]+cy; }
+  var gaps=[],arms=[],cpx=[],cpy=[];
+  for(var j=0;j<Np;j++){ var px=PINS[j][0],py=PINS[j][1], best=Infinity, bi=0;
+    for(var i2=0;i2<n;i2++){ var ex=WX[i2]-px, ey=WY[i2]-py, dd=ex*ex+ey*ey; if(dd<best){best=dd;bi=i2;} }
+    var wx=WX[bi], wy=WY[bi], dist=Math.hypot(wx-px,wy-py); gaps.push(dist-Rr);
+    var nxj=(px-wx)/dist, nyj=(py-wy)/dist; arms.push((wx-cx)*nyj-(wy-cy)*nxj); cpx.push(wx); cpy.push(wy); }
+  return {gaps:gaps,arms:arms,cpx:cpx,cpy:cpy};
+}
+function playRange(gaps,arms,tol){ tol=tol||0; var hi=Infinity, lo=-Infinity;
+  for(var j=0;j<gaps.length;j++){ var g=gaps[j]-tol, aa=arms[j]; if(aa>1e-9)hi=Math.min(hi,g/aa); else if(aa<-1e-9)lo=Math.max(lo,g/aa); }
+  return [lo,hi]; }
+function windup(gaps,arms){ var T=T_RATED*1000, hi=playRange(gaps,arms)[1];
+  function torque(b){ var s=0; for(var j=0;j<gaps.length;j++){ var p=Math.max(0,b*arms[j]-gaps[j]); s+=K_CONTACT*p*arms[j]; } return s; }
+  var b1=hi+1e-6; while(torque(b1)<T){ b1=hi+2*(b1-hi); if(b1-hi>0.05) return {b:(isFinite(hi)?hi:0)+0.05,k:0,ne:0,F:gaps.map(function(){return 0;})}; }
+  var b0=hi; for(var it=0;it<60;it++){ var bm=0.5*(b0+b1); if(torque(bm)<T)b0=bm; else b1=bm; }
+  var b=0.5*(b0+b1), F=gaps.map(function(g,j){return K_CONTACT*Math.max(0,b*arms[j]-g);});
+  var ne=0,k=0; for(var j=0;j<gaps.length;j++) if(F[j]>0){ne++; k+=K_CONTACT*arms[j]*arms[j];}
+  return {b:b,k:k,ne:ne,F:F}; }
+function evalFast(offset,coeffs){
+  var nPts=1800, ns=14, prof=profile(offset,coeffs,nPts), arcmin=180/Math.PI*60;
+  var plays=[],margins=[],ks=[],bs=[],nes=[], paMax=0;
+  for(var i=0;i<ns;i++){ var psi=2*Math.PI/N*i/ns, ms=meshState(prof,psi);
+    var pr=playRange(ms.gaps,ms.arms); plays.push(pr[1]-pr[0]);
+    var pm=playRange(ms.gaps,ms.arms,TOL); margins.push(pm[1]-pm[0]);
+    var w=windup(ms.gaps,ms.arms); ks.push(w.k); bs.push(w.b); nes.push(w.ne);
+    var fmax=1e-9; for(var j=0;j<Np;j++) if(w.F[j]>fmax)fmax=w.F[j];
+    for(var j=0;j<Np;j++){ if(w.F[j]>0.10*fmax){ var px=PINS[j][0],py=PINS[j][1], nx=px-ms.cpx[j], ny=py-ms.cpy[j], nn=Math.hypot(nx,ny);
+      if(nn>1e-9){ var phi=Math.atan2(py,px), c=Math.abs((nx/nn)*(-Math.sin(phi))+(ny/nn)*Math.cos(phi)); var a=Math.acos(Math.min(1,Math.max(0,c)))*180/Math.PI; if(a>paMax)paMax=a; } } }
+  }
+  return { backlash:Math.max.apply(null,plays)*arcmin, stiff:Math.min.apply(null,ks)/1e3/arcmin,
+           ripple:(Math.max.apply(null,bs)-Math.min.apply(null,bs))*1e6, margin:Math.min.apply(null,margins)*arcmin,
+           n_eng:Math.min.apply(null,nes), maxPA:paMax };
+}
+var LO=[-0.10,-0.04,-0.04,-0.04,-0.04], HI=[-0.015,0.04,0.04,0.04,0.04], D=5, POP=48, GEN=44;
+function rnd(a,b){return a+Math.random()*(b-a);}
+function clamp(v,a,b){return v<a?a:(v>b?b:v);}
+function newx(){var x=[];for(var i=0;i<D;i++)x.push(rnd(LO[i],HI[i]));return x;}
+function evalx(x){ var coeffs=x.slice(1), r=evalFast(x[0],coeffs), dmax=x[0];
+  for(var i=0;i<coeffs.length;i++)dmax+=Math.abs(coeffs[i]);
+  var cv=0; if(dmax>-0.005)cv+=(dmax+0.005)*100; if(!isFinite(r.ripple))cv+=100;
+  if(r.margin<0.05)cv+=(0.05-r.margin); if(r.n_eng<2)cv+=1;
+  r.f=[r.backlash,-r.stiff,r.ripple,r.maxPA]; r.cv=cv; r.x=x; return r; }
+function dom(a,b){ if(a.cv>0||b.cv>0) return a.cv<b.cv;
+  var le=true,lt=false; for(var k=0;k<4;k++){ if(a.f[k]>b.f[k]+1e-12)le=false; if(a.f[k]<b.f[k]-1e-12)lt=true; } return le&&lt; }
+function ndsort(P){ var S=[],n=[],fronts=[[]];
+  for(var p=0;p<P.length;p++){ S[p]=[]; n[p]=0;
+    for(var q=0;q<P.length;q++){ if(p===q)continue; if(dom(P[p],P[q]))S[p].push(q); else if(dom(P[q],P[p]))n[p]++; }
+    if(n[p]===0){P[p].rank=0; fronts[0].push(p);} }
+  var i=0; while(fronts[i] && fronts[i].length){ var nx=[];
+    for(var a=0;a<fronts[i].length;a++){ var pi=fronts[i][a];
+      for(var b=0;b<S[pi].length;b++){ var qi=S[pi][b]; n[qi]--; if(n[qi]===0){P[qi].rank=i+1; nx.push(qi);} } }
+    i++; fronts.push(nx); } fronts.pop(); return fronts; }
+function crowd(P,idxs){ for(var k=0;k<idxs.length;k++)P[idxs[k]].cd=0;
+  for(var m=0;m<4;m++){ idxs.sort(function(a,b){return P[a].f[m]-P[b].f[m];});
+    P[idxs[0]].cd=Infinity; P[idxs[idxs.length-1]].cd=Infinity;
+    var rg=(P[idxs[idxs.length-1]].f[m]-P[idxs[0]].f[m])||1;
+    for(var i=1;i<idxs.length-1;i++)P[idxs[i]].cd+=(P[idxs[i+1]].f[m]-P[idxs[i-1]].f[m])/rg; } }
+function tour(P){ var a=P[Math.floor(Math.random()*P.length)], b=P[Math.floor(Math.random()*P.length)];
+  if(a.rank!==b.rank) return a.rank<b.rank?a:b; return (a.cd||0)>(b.cd||0)?a:b; }
+function cross(p1,p2){ var c1=[],c2=[]; for(var i=0;i<D;i++){ var lo=Math.min(p1.x[i],p2.x[i]), hi=Math.max(p1.x[i],p2.x[i]), d=hi-lo||1e-6;
+  c1.push(clamp(lo-0.25*d+Math.random()*1.5*d,LO[i],HI[i])); c2.push(clamp(lo-0.25*d+Math.random()*1.5*d,LO[i],HI[i])); } return [c1,c2]; }
+function mutate(x){ for(var i=0;i<D;i++) if(Math.random()<0.25) x[i]=clamp(x[i]+(Math.random()-0.5)*(HI[i]-LO[i])*0.15,LO[i],HI[i]); return x; }
+function frontOut(pop){ var feas=pop.filter(function(p){return p.cv===0;});
+  var nd=feas.filter(function(p,i){ for(var j=0;j<feas.length;j++){ if(j!==i && dom(feas[j],p)) return false; } return true; });
+  var out=[]; nd.forEach(function(p){ if(!out.some(function(q){return Math.abs(q.backlash-p.backlash)<0.05 && Math.abs(q.stiff-p.stiff)<0.2;}))
+    out.push({offset:p.x[0],coeffs:p.x.slice(1),backlash:p.backlash,stiff:p.stiff,ripple:p.ripple,maxPA:p.maxPA,margin:p.margin,n_eng:p.n_eng}); });
+  return out; }
+function run(){
+  var pop=[]; for(var i=0;i<POP;i++)pop.push(evalx(newx()));
+  for(var gen=0; gen<GEN; gen++){
+    var off=[]; while(off.length<POP){ var cs=cross(tour(pop),tour(pop)); off.push(evalx(mutate(cs[0]))); if(off.length<POP)off.push(evalx(mutate(cs[1]))); }
+    var R=pop.concat(off); var fronts=ndsort(R); var np=[], fi=0;
+    while(fi<fronts.length && np.length+fronts[fi].length<=POP){ crowd(R,fronts[fi]); for(var a=0;a<fronts[fi].length;a++)np.push(R[fronts[fi][a]]); fi++; }
+    if(np.length<POP && fi<fronts.length){ crowd(R,fronts[fi]); var last=fronts[fi].slice().sort(function(a,b){return (R[b].cd||0)-(R[a].cd||0);});
+      for(var a=0;a<last.length && np.length<POP;a++)np.push(R[last[a]]); }
+    pop=np;
+    postMessage({type:'progress', pct:Math.round(100*(gen+1)/GEN), front:frontOut(pop)});
+  }
+  postMessage({type:'done', pct:100, front:frontOut(pop)});
+}
+onmessage=function(e){ var g=e.data; Rb=g.Rb;Rr=g.Rr;E=g.E;N=g.N;M=g.M;Np=g.Np;TOL=g.TOL;T_RATED=g.T_RATED;K_CONTACT=g.K_CONTACT;ROT=g.ROT;PINS=g.PINS;NK=g.NK; run(); };
+`;
+
+function runOptimize(){
   if(OPT.running) return;
   OPT.running=true; OPT.ran=true; OPT.front=[]; OPT.sel=-1; I('opt-pick').innerHTML='';
   const btn=I('opt-run'); btn.disabled=true; btn.textContent=t('opt_running');
-  const LO=[-0.10,-0.04,-0.04], HI=[-0.015,0.04,0.04];
-  const rnd=(a,b)=>a+Math.random()*(b-a), cl=(v,a,b)=>Math.max(a,Math.min(b,v));
-  const randD=()=>[rnd(LO[0],HI[0]),rnd(LO[1],HI[1]),rnd(LO[2],HI[2])];
-  const mut=p=>p.map((v,i)=>cl(v+(Math.random()-0.5)*(HI[i]-LO[i])*0.30,LO[i],HI[i]));
-  const consider=p=>{
-    const dmax=p[0]+Math.abs(p[1])+Math.abs(p[2]); if(dmax>-0.005) return;
-    const r=evalFast(p[0],p[1],p[2]);
-    if(!isFinite(r.ripple) || r.margin<0.05 || r.n_eng<2) return;  // just "doesn't jam under tolerance" + carries load
-                                                                    // (low margin = tight/low-backlash but less robust; shown per design)
-    if(OPT.front.some(a=>dom4(a,r))) return;
-    OPT.front=OPT.front.filter(a=>!dom4(r,a));
-    if(!OPT.front.some(a=>Math.abs(a.backlash-r.backlash)<0.06 && Math.abs(a.stiff-r.stiff)<0.25)) OPT.front.push(r);
+  stopWorker();
+  const wk=new Worker(URL.createObjectURL(new Blob([WORKER_SRC],{type:'application/javascript'})));
+  OPT.worker=wk;
+  wk.onmessage=(e)=>{
+    const m=e.data; OPT.front=m.front||[];
+    if(m.type==='progress'){ I('opt-stat').textContent=`${m.pct}%  ·  ${OPT.front.length}`; drawOptPlot(); return; }
+    OPT.running=false; btn.disabled=false; btn.textContent=t('opt_run'); stopWorker();
+    OPT.front.sort((a,b)=>a.backlash-b.backlash);
+    I('opt-stat').textContent = OPT.front.length
+      ? t('opt_done').replace('{n}',OPT.front.length).replace('{b}',OPT.front[0].backlash.toFixed(2)) : t('opt_none');
+    if(OPT.front.length){ OPT.sel=kneeIndex(OPT.front); showPick(); }
+    drawOptPlot();
   };
-  const GENS=26, POP=30, TOTAL=GENS*POP; let ev=0;
-  for(let g=0; g<GENS; g++){
-    for(let i=0;i<POP;i++){
-      let p;
-      if(g===0 || OPT.front.length===0 || Math.random()<0.3) p=randD();
-      else { const par=OPT.front[Math.floor(Math.random()*OPT.front.length)]; p=mut([par.offset,par.s1,par.s2]); }
-      consider(p); ev++;
-      if(ev%10===0){ I('opt-stat').textContent=`${Math.round(100*ev/TOTAL)}%  ·  ${OPT.front.length}`; drawOptPlot(); await new Promise(r=>setTimeout(r,0)); }
-    }
-  }
-  OPT.front.sort((a,b)=>a.backlash-b.backlash);
-  OPT.running=false; btn.disabled=false; btn.textContent=t('opt_run');
-  I('opt-stat').textContent = OPT.front.length
-    ? t('opt_done').replace('{n}',OPT.front.length).replace('{b}',OPT.front[0].backlash.toFixed(2))
-    : t('opt_none');
-  if(OPT.front.length){ OPT.sel=kneeIndex(OPT.front); showPick(); }
-  drawOptPlot();
+  wk.onerror=(err)=>{ OPT.running=false; btn.disabled=false; btn.textContent=t('opt_run'); stopWorker();
+    I('opt-stat').textContent='optimizer error (see console)'; console.error(err); };
+  wk.postMessage({ Rb,Rr,E,N,M,Np,TOL,T_RATED,K_CONTACT,ROT:ROT_SIGN, PINS, NK });
 }
 function showPick(){
   const el=I('opt-pick'); if(OPT.sel<0||!OPT.front[OPT.sel]){ el.innerHTML=''; return; }
@@ -831,7 +907,7 @@ function showPick(){
     row(t('m_margin'), d.margin.toFixed(2)+"'")+
     row(t('m_teeth'), d.n_eng+' / '+Np)+
     `<button class="load" id="opt-load">${t('opt_load')}</button>`;
-  I('opt-load').onclick=()=>{ state.offset=d.offset; state.s1=d.s1; state.s2=d.s2; afterChange(); };
+  I('opt-load').onclick=()=>{ state.offset=d.offset; state.coeffs=d.coeffs.slice(); afterChange(); };
 }
 const VIRID=[[253,231,37],[94,201,98],[33,145,140],[59,82,139],[68,1,84]];
 function optColor(tt){ tt=Math.max(0,Math.min(1,tt)); const x=tt*4,i=Math.floor(x),f=x-i,a=VIRID[i],b=VIRID[Math.min(i+1,4)]; return `rgb(${a[0]+(b[0]-a[0])*f|0},${a[1]+(b[1]-a[1])*f|0},${a[2]+(b[2]-a[2])*f|0})`; }
