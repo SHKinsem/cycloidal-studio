@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 进阶层: 更丰富的谐波参数化 + 完整目标集(压力角/可加工性/平滑度/鲁棒性) + NSGA-II 帕累托前沿。
-复用 CycloidalModAnalysis.py 的已验证物理 (mesh_state/play_range/windup), 不改动核心。
+复用 model.py 的已验证物理 (mesh_state/play_range/windup), 不改动核心。
 
 参数化(双向对称, 余弦级数, 天然带限=平滑):
     δ(θ) = offset + Σ_{k=1}^{K} c_k · cos(k·N·θ)     沿齿廓法向, δ<0 去料

@@ -20,3 +20,6 @@ Thumbs.db
 
 # Claude Code local state
 .claude/
+
+# Regenerable optimizer figure output (the committed CSV is enough to rebuild pareto.html)
+optimizer/results/*.png

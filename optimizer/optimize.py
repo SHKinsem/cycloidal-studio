@@ -4,8 +4,8 @@ NSGA-II 多目标优化 (pygad, 无新依赖): 在更丰富的 K 谐波参数化
 设计向量 p = [offset, c1, c2, c3, c4]  (K=4)
 目标(最小化): 背隙, -刚度, 传动误差波动, 最大压力角
 约束(罚入支配): 鲁棒公差余量>=0.5', 凹处曲率半径>=刀具半径, 处处去料>=5um
-运行: python cycloidal_nsga2.py            完整 (~2-3 min)
-      $env:QUICK=1; python cycloidal_nsga2.py   冒烟
+运行: python optimize.py            完整 (~2-3 min)
+      QUICK=1 python optimize.py     冒烟
 输出: pareto_front.csv, ParetoFront.png, solidworks_equations_pareto.txt, 终端最优/膝点
 """
 import os

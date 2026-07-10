@@ -304,7 +304,7 @@ let ROT_SIGN=-1.0, GEOM_WORST=0;
 let PINS=[];
 function rebuildPins(){ PINS=[]; for(let j=0;j<Np;j++) PINS.push([Rb*Math.cos(2*Math.PI*j/Np), Rb*Math.sin(2*Math.PI*j/Np)]); }
 
-// ============================ physics (port of CycloidalModAnalysis.py) ============================
+// ============================ physics (port of optimizer/model.py) ============================
 function profile(offset,s1,s2,nPts,variant){
   variant=variant||'harmonic';
   const X=new Float64Array(nPts),Y=new Float64Array(nPts),TH=new Float64Array(nPts), tp=2*Math.PI/N;
@@ -462,8 +462,8 @@ const TXT = {
   c_stack:      { en:'tolerance stack', zh:'公差叠加' },
   footer_read:  { en:"Reading it: tight at the mid-flank (where the arm is longest) carries load with little lost motion — that buys stiffness and low backlash. Relieved at tip and root leaves room for the tolerance stack and softens entry/exit shock. That reverse-bow, sitting right at the tolerance edge, is what the GA optimum finds.",
                   zh:'看图：齿腰（力臂最长处）最紧 —— 用极小的空回承载，换来高刚度、低背隙；齿顶与齿根放松 —— 给公差叠加留余量、缓和入啮/出啮冲击。这条贴着公差边界的"反弓"曲线，正是 GA 最优解。' },
-  footer_note:  { en:'Model: quasi-static, rigid disk, linearised contact (K=50 N/µm per tooth). Trends are faithful; absolute values are order-of-magnitude. Physics ported from CycloidalModAnalysis.py. No lubricant film / dynamics.',
-                  zh:'模型：准静态、刚性盘、线性化接触（K=50 N/µm 每齿）。趋势可靠，绝对值为量级估计。物理模型移植自 CycloidalModAnalysis.py，未含油膜与动力学。' },
+  footer_note:  { en:'Model: quasi-static, rigid disk, linearised contact (K=50 N/µm per tooth). Trends are faithful; absolute values are order-of-magnitude. Physics ported from optimizer/model.py. No lubricant film / dynamics.',
+                  zh:'模型：准静态、刚性盘、线性化接触（K=50 N/µm 每齿）。趋势可靠，绝对值为量级估计。物理模型移植自 optimizer/model.py，未含油膜与动力学。' },
 };
 const state = { offset:-0.0209, s1:-0.0012, s2:-0.0037, psi:0, playing:true, speed:0.45, exag:40, lang:'en' };
 function t(key){ const e=TXT[key]; return e ? (e[state.lang]||e.en) : key; }

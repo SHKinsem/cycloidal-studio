@@ -106,7 +106,7 @@ TEMPLATE = r"""<meta charset="utf-8">
   <footer>
     <span data-i18n="foot1">Geometry fixed at Rb 34 · Rr 2.5 · E 1.5 · N 18 (ratio 18:1), rated 30 N·m, tolerance stack ±15 µm — the geometry the front was optimized for. Live single-tooth tuning:</span>
     <a href="index.html" data-i18n="footlink">open the Shape Designer →</a>
-    <div class="note" data-i18n="note">δ(θ)=offset+Σₖ cₖ·cos(kNθ), normal modification. Metrics from a quasi-static loaded-contact model (K=50 N/µm per tooth), verified against CycloidalModAnalysis.py. Trends match the RV-reducer literature (5/5 benchmark). Absolute values are order-of-magnitude.</div>
+    <div class="note" data-i18n="note">δ(θ)=offset+Σₖ cₖ·cos(kNθ), normal modification. Metrics from a quasi-static loaded-contact model (K=50 N/µm per tooth), verified against optimizer/model.py. Trends match the RV-reducer literature (5/5 benchmark). Absolute values are order-of-magnitude.</div>
   </footer>
 </div>
 
@@ -138,8 +138,8 @@ const TXT={
   foot1:{en:'Geometry fixed at Rb 34 · Rr 2.5 · E 1.5 · N 18 (ratio 18:1), rated 30 N·m, tolerance stack ±15 µm — the geometry the front was optimized for. Live single-tooth tuning:',
          zh:'几何固定为 Rb 34 · Rr 2.5 · E 1.5 · N 18 (减速比 18:1), 额定 30 N·m, 公差叠加 ±15µm —— 前沿即在此几何下优化。单齿实时调形:'},
   footlink:{en:'open the Shape Designer →',zh:'打开齿廓设计器 →'},
-  note:{en:'δ(θ)=offset+Σₖ cₖ·cos(kNθ), normal modification. Metrics from a quasi-static loaded-contact model (K=50 N/µm per tooth), verified against CycloidalModAnalysis.py. Trends match the RV-reducer literature (5/5 benchmark). Absolute values are order-of-magnitude.',
-        zh:'δ(θ)=offset+Σₖ cₖ·cos(kNθ), 法向修型。指标来自准静态加载接触模型(每齿 K=50 N/µm), 已与 CycloidalModAnalysis.py 核对; 趋势符合 RV 减速器文献(5/5 基准)。绝对值为量级估计。'},
+  note:{en:'δ(θ)=offset+Σₖ cₖ·cos(kNθ), normal modification. Metrics from a quasi-static loaded-contact model (K=50 N/µm per tooth), verified against optimizer/model.py. Trends match the RV-reducer literature (5/5 benchmark). Absolute values are order-of-magnitude.',
+        zh:'δ(θ)=offset+Σₖ cₖ·cos(kNθ), 法向修型。指标来自准静态加载接触模型(每齿 K=50 N/µm), 已与 optimizer/model.py 核对; 趋势符合 RV 减速器文献(5/5 基准)。绝对值为量级估计。'},
   m_backlash:{en:'backlash',zh:'背隙'}, m_stiff:{en:'stiffness',zh:'刚度'}, m_ripple:{en:'ripple',zh:'波动'},
   m_maxPA:{en:'max pressure angle',zh:'最大压力角'}, m_worstMargin:{en:'robust margin (±7.5µm)',zh:'鲁棒余量 (±7.5µm)'},
   m_minR:{en:'min curvature radius',zh:'最小曲率半径'}, m_teeth:{en:'loaded teeth',zh:'受载齿数'},
