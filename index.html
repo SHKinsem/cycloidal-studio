@@ -217,6 +217,10 @@
       <div class="field"><label><span data-i18n="lbl_tol">tolerance</span> <span class="unit">µm</span></label><input id="g-tol" type="number" value="15" min="1" max="80" step="1"></div>
       <div class="field"><label><span data-i18n="lbl_mach">mach. error ±</span> <span class="unit">µm</span></label><input id="g-mach" type="number" value="5" min="0" max="20" step="0.5"></div>
       <div class="field"><label><span data-i18n="lbl_T">rated torque</span> <span class="unit">N·m</span></label><input id="g-T" type="number" value="30" min="1" max="500" step="1"></div>
+      <div class="field"><label><span data-i18n="opt_target">target backlash</span> <span class="unit">′</span></label><input id="opt-goal" type="number" value="3" min="0.5" max="30" step="0.5"></div>
+      <div class="field"><label><span data-i18n="lbl_thick">disk width</span> <span class="unit">mm</span></label><input id="g-thick" type="number" value="10" min="1" max="100" step="0.5"></div>
+      <div class="field"><label><span data-i18n="lbl_cbear">bearing clr.</span> <span class="unit">µm</span></label><input id="g-cbear" type="number" value="0" min="0" max="100" step="1"></div>
+      <div class="field"><label><span data-i18n="lbl_cout">output clr.</span> <span class="unit">µm</span></label><input id="g-cout" type="number" value="0" min="0" max="100" step="1"></div>
     </div>
     <div class="warnbar" id="warn" data-i18n="warn">Geometry undercuts — the unmodified tooth can't mesh with all pins. Reduce E or increase Rb.</div>
   </div>
@@ -272,7 +276,10 @@
 
       <div class="metrics">
         <div class="metric"><span class="k"><span data-i18n="m_backlash">backlash</span><small data-i18n="sub_backlash">lost motion, worst crank angle</small></span><span class="v" id="m-backlash"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_syslm">system lost motion</span><small data-i18n="sub_syslm">mesh + bearing + output coupling</small></span><span class="v" id="m-syslm"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_stiff">stiffness</span><small data-i18n="sub_stiff">torsional, worst crank angle</small></span><span class="v" id="m-stiff"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_stress">contact stress</span><small data-i18n="sub_stress">peak Hertz pressure, loaded pin</small></span><span class="v" id="m-stress"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_safety">safety factor</span><small data-i18n="sub_safety">vs 1500 MPa contact-fatigue limit</small></span><span class="v" id="m-safety"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_ripple">ripple</span><small data-i18n="sub_ripple">wind-up variation = smoothness</small></span><span class="v" id="m-ripple"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_margin">tolerance margin</span><small data-i18n="sub_margin">free play left under the stack</small></span><span class="v" id="m-margin"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_rmargin">robust margin</span><small data-i18n="sub_rmargin">margin at worst machining error</small></span><span class="v" id="m-rmargin"></span></div>
@@ -344,7 +351,9 @@
 // ============================ geometry (editable) ============================
 let Rb=34.0, Rr=2.5, E=1.5, N=18, M=N+1, Np=N+1;
 let TOL=0.015, MACH=0.005, T_RATED=30.0;
+let L_TOOTH=10.0, C_BEAR=0.0, C_OUT=0.0;   // disk thickness [mm]; input-bearing & output-coupling radial clearance [mm] (opt-in)
 const K_CONTACT=5.0e4;
+const ESTAR=115385.0, SH_LIM=1500.0;   // steel-steel Hertz E* [MPa] (1/E*=2(1-0.3²)/210000); contact-fatigue limit [MPa]
 let ROT_SIGN=-1.0, GEOM_WORST=0;
 let PINS=[];
 function rebuildPins(){ PINS=[]; for(let j=0;j<Np;j++) PINS.push([Rb*Math.cos(2*Math.PI*j/Np), Rb*Math.sin(2*Math.PI*j/Np)]); }
@@ -378,7 +387,7 @@ function meshState(prof,psi,rot){
   const a=rot*psi/N, co=Math.cos(a), si=Math.sin(a), tp=2*Math.PI/N;
   const WX=new Float64Array(n), WY=new Float64Array(n);
   for(let i=0;i<n;i++){ WX[i]=co*X[i]-si*Y[i]+cx; WY[i]=si*X[i]+co*Y[i]+cy; }
-  const gaps=[],arms=[],uu=[],cpx=[],cpy=[];
+  const gaps=[],arms=[],uu=[],cpx=[],cpy=[],invre=[];
   for(let j=0;j<Np;j++){
     const px=PINS[j][0], py=PINS[j][1]; let best=Infinity, bi=0;
     for(let i=0;i<n;i++){ const dd=(WX[i]-px)**2+(WY[i]-py)**2; if(dd<best){best=dd; bi=i;} }
@@ -387,8 +396,28 @@ function meshState(prof,psi,rot){
     const nxj=(px-wx)/dist, nyj=(py-wy)/dist;
     arms.push((wx-cx)*nyj-(wy-cy)*nxj);
     uu.push((((TH[bi]%tp)+tp)%tp)/tp); cpx.push(wx); cpy.push(wy);
+    invre.push(contactInvRe(WX,WY,bi,wx,wy,px,py));
   }
-  return {gaps,arms,uu,cpx,cpy,cx,cy,rot:a};
+  return {gaps,arms,uu,cpx,cpy,invre,cx,cy,rot:a};
+}
+// equivalent curvature 1/R_e for the pin↔tooth line contact at the nearest sample.
+// ponytail: finite-diff curvature at the contact sample (first-order); concave (conforming) flank
+// subtracts, so the cycloid valley gives a low-stress contact. Cap R_e≤1000mm to avoid a 0-stress singularity.
+function contactInvRe(WX,WY,bi,wx,wy,px,py){
+  const n=WX.length, bm=(bi-1+n)%n, bp=(bi+1)%n;
+  const tx=(WX[bp]-WX[bm])*0.5, ty=(WY[bp]-WY[bm])*0.5;      // ≈ 1st derivative
+  const ax=WX[bp]-2*wx+WX[bm], ay=WY[bp]-2*wy+WY[bm];        // ≈ 2nd derivative (points to centre of curvature)
+  const sp=Math.hypot(tx,ty)||1e-9, kap=Math.abs((tx*ay-ty*ax)/(sp*sp*sp));
+  const rho=kap>1e-9? 1/kap : 1e6;
+  const concave=(ax*(px-wx)+ay*(py-wy))>0;                    // tooth bends toward the pin ⇒ conforming
+  let invRe=concave? Math.abs(1/Rr-1/rho) : (1/Rr+1/rho);
+  return invRe<1e-3? 1e-3 : invRe;
+}
+// worst Hertzian line-contact pressure over the loaded pins [MPa]. F [N], invre [1/mm].
+// σ_max = sqrt(F'·E*/(π·R_e)), F'=F/L. Uses the forces the load solve already produced.
+function hertzMaxMPa(F,invre){
+  let sm=0; for(let j=0;j<F.length;j++){ if(F[j]>0){ const s=Math.sqrt((F[j]/L_TOOTH)*ESTAR*invre[j]/Math.PI); if(s>sm)sm=s; } }
+  return sm;
 }
 function playRange(gaps,arms,tol=0){
   let hi=Infinity, lo=-Infinity;
@@ -412,7 +441,7 @@ function windup(gaps,arms){
 function evaluate(offset,coeffs,nPts,variant){
   nPts=nPts||8000;   // match Python NTH so the nearest-point search agrees to the displayed digit
   const prof=profile(offset,coeffs,nPts,variant), arcmin=180/Math.PI*60;
-  const plays=[],margins=[],rmargins=[],ks=[],bs=[],nes=[];
+  const plays=[],margins=[],rmargins=[],ks=[],bs=[],nes=[]; let sigMax=0;
   for(let i=0;i<48;i++){   // 48 crank samples over one mesh cycle to resolve the TE ripple
     const psi=2*Math.PI/N*i/48, ms=meshState(prof,psi);
     const [lo,hi]=playRange(ms.gaps,ms.arms); plays.push(hi-lo);
@@ -420,10 +449,15 @@ function evaluate(offset,coeffs,nPts,variant){
     // worst-case machining error +e tightens every gap by e, i.e. an extra e on the tolerance stack
     const [rlo,rhi]=playRange(ms.gaps,ms.arms,TOL+MACH); rmargins.push(rhi-rlo);
     const w=windup(ms.gaps,ms.arms); ks.push(w.k); bs.push(w.b); nes.push(w.ne);
+    const s=hertzMaxMPa(w.F,ms.invre); if(s>sigMax)sigMax=s;   // durability: stress on the loaded contacts
   }
+  // system lost motion = mesh backlash + input-bearing + output-coupling clearance, each a first-order
+  // output-referred angular deadband (ponytail: lumped, lever arm ≈ pin-circle / output-pin-circle radius).
+  const sysLM=(Math.max(...plays) + C_BEAR/Rb + C_OUT/(0.6*Rb))*arcmin;
   return { backlash:Math.max(...plays)*arcmin, stiff:Math.min(...ks)/1e3/arcmin,
            ripple:(Math.max(...bs)-Math.min(...bs))*1e6, margin:Math.min(...margins)*arcmin,
-           rmargin:Math.min(...rmargins)*arcmin, n_eng:Math.min(...nes) };
+           rmargin:Math.min(...rmargins)*arcmin, n_eng:Math.min(...nes),
+           sigmaH:sigMax, safety:(sigMax>1e-9?SH_LIM/sigMax:Infinity), sysLM };
 }
 // pick rotation sign by conjugacy of the unmodified tooth (mirrors Python self-check);
 // also reports worst residual clearance so we can flag an invalid (undercut) geometry.
@@ -453,6 +487,9 @@ const TXT = {
   lbl_tol:      { en:'tolerance', zh:'公差叠加' },
   lbl_mach:     { en:'mach. error ±', zh:'加工误差 ±' },
   lbl_T:        { en:'rated torque', zh:'额定扭矩' },
+  lbl_thick:    { en:'disk width', zh:'摆线盘厚度' },
+  lbl_cbear:    { en:'bearing clr.', zh:'轴承游隙' },
+  lbl_cout:     { en:'output clr.', zh:'输出机构间隙' },
   warn:         { en:"Geometry undercuts — the unmodified tooth can't mesh with all pins. Reduce E or increase Rb.",
                   zh:'几何根切 —— 未修型齿廓无法与全部针齿共轭啮合。请减小 E 或增大 Rb。' },
   mesh_h:       { en:'Mesh', zh:'啮合' },
@@ -475,9 +512,16 @@ const TXT = {
   desc_c3:      { en:'flank fine shape', zh:'齿面细部' },
   desc_c4:      { en:'flank fine shape', zh:'齿面细部' },
   m_backlash:   { en:'backlash', zh:'背隙' },
-  sub_backlash: { en:'lost motion, worst crank angle', zh:'空回，最差曲柄角' },
+  sub_backlash: { en:'mesh only, worst crank angle', zh:'仅啮合，最差曲柄角' },
+  m_syslm:      { en:'system lost motion', zh:'系统空回' },
+  sub_syslm:    { en:'mesh + bearing + output coupling', zh:'啮合 + 轴承 + 输出机构' },
   m_stiff:      { en:'stiffness', zh:'刚度' },
   sub_stiff:    { en:'torsional, worst crank angle', zh:'扭转，最差曲柄角' },
+  m_stress:     { en:'contact stress', zh:'接触应力' },
+  sub_stress:   { en:'peak Hertz pressure, loaded pin', zh:'峰值赫兹接触压力' },
+  m_safety:     { en:'safety factor', zh:'安全系数' },
+  sub_safety:   { en:'vs 1500 MPa contact-fatigue limit', zh:'相对 1500 MPa 接触疲劳极限' },
+  overload:     { en:'· overstressed', zh:'· 超载' },
   m_ripple:     { en:'ripple', zh:'波动' },
   sub_ripple:   { en:'wind-up variation = smoothness', zh:'加载转角波动 = 丝滑度' },
   m_margin:     { en:'tolerance margin', zh:'公差余量' },
@@ -507,9 +551,14 @@ const TXT = {
   jamword:      { en:'· jam', zh:'· 卡死' },
   riskword:     { en:'· jam risk', zh:'· 卡死风险' },
   opt_h:        { en:'Optimize for this geometry', zh:'为当前几何搜索最优' },
-  opt_sub:      { en:'live NSGA-II in your browser · every result survives your machining error', zh:'浏览器内实时 NSGA-II · 所有结果都能抗你设定的加工误差' },
-  opt_run:      { en:'◆ Find optimal modifications', zh:'◆ 搜索最优修型' },
+  opt_sub:      { en:'one click → the optimal robust curve loaded into the sliders, meeting your target backlash if the tolerances allow', zh:'一键 → 最优抗误差曲线直接载入滑块;公差允许时即达到你的目标背隙' },
+  opt_target:   { en:'target backlash', zh:'目标背隙' },
+  opt_run:      { en:'◆ Get the optimal curve', zh:'◆ 一键生成最优曲线' },
   opt_running:  { en:'searching…', zh:'搜索中…' },
+  opt_hit:      { en:'✓ backlash {b}′ · robust to ±{e} µm machining error · loaded — SolidWorks equation ready below',
+                  zh:'✓ 背隙 {b}′ · 可抗 ±{e} µm 加工误差 · 已载入 —— 下方 SolidWorks 方程已就绪' },
+  opt_miss:     { en:'⚠ lowest robust backlash is {b}′ — can\'t reach {g}′ at these tolerances. You\'d need tolerance + machining ≈ {need} µm (now {now} µm). Loaded the closest.',
+                  zh:'⚠ 当前公差下最低鲁棒背隙 {b}′,达不到 {g}′。估计需把 公差+加工误差 收到约 {need} µm(现 {now} µm)。已载入最接近的。' },
   opt_hint:     { en:'Set your geometry above, then search. Click a point to load it into the sliders.',
                   zh:'先在上方设好几何, 再搜索。点击散点即可载入到滑块。' },
   opt_stale:    { en:'⟳ geometry changed — re-run to update the front', zh:'⟳ 几何已改 — 重新搜索以更新前沿' },
@@ -528,8 +577,8 @@ const TXT = {
   c_stack:      { en:'tolerance stack', zh:'公差叠加' },
   footer_read:  { en:"Reading it: tight at the mid-flank (where the arm is longest) carries load with little lost motion — that buys stiffness and low backlash. Relieved at tip and root leaves room for the tolerance stack and softens entry/exit shock. That reverse-bow, sitting right at the tolerance edge, is what the GA optimum finds.",
                   zh:'看图：齿腰（力臂最长处）最紧 —— 用极小的空回承载，换来高刚度、低背隙；齿顶与齿根放松 —— 给公差叠加留余量、缓和入啮/出啮冲击。这条贴着公差边界的"反弓"曲线，正是 GA 最优解。' },
-  footer_note:  { en:'Model: quasi-static, rigid disk, linearised contact (K=50 N/µm per tooth). Trends are faithful; absolute values are order-of-magnitude. Physics ported from optimizer/model.py. No lubricant film / dynamics.',
-                  zh:'模型：准静态、刚性盘、线性化接触（K=50 N/µm 每齿）。趋势可靠，绝对值为量级估计。物理模型移植自 optimizer/model.py，未含油膜与动力学。' },
+  footer_note:  { en:'Model: quasi-static, rigid disk, linearised load-sharing (K=50 N/µm per tooth). System lost motion adds the input-bearing and output-coupling clearances as first-order lumped deadbands; contact stress is a Hertz line-contact post-process on the computed forces (steel, 1500 MPa fatigue limit). Trends are faithful; absolute values are order-of-magnitude. No lubricant film / dynamics.',
+                  zh:'模型：准静态、刚性盘、线性化载荷分配（K=50 N/µm 每齿）。系统空回把输入轴承与输出机构间隙作为一阶集总死区叠加；接触应力是对已求解接触力做的赫兹线接触后处理（钢，1500 MPa 疲劳极限）。趋势可靠，绝对值为量级估计。未含油膜与动力学。' },
 };
 const NK = 4;   // number of harmonics in the modification δ(θ)=offset+Σ_{k=1}^{NK} c_k·cos(kNθ)
 const state = { offset:-0.0209, coeffs:[-0.0012,-0.0037,0,0], psi:0, playing:true, speed:0.45, exag:40, lang:'en' };
@@ -669,7 +718,12 @@ function updateMetrics(){
   const r=evaluate(state.offset,state.coeffs);
   const set=(id,html,cls)=>{ const el=I(id); el.innerHTML=html; el.className='v'+(cls?' '+cls:''); };
   set('m-backlash', `${fmt(r.backlash)}<u>′</u> ${deltaTag(r.backlash,BASE&&BASE.backlash,'low')}`);
+  set('m-syslm',    `${fmt(r.sysLM)}<u>′</u>`);
   set('m-stiff',    `${fmt(r.stiff,1)}<u>N·m/′</u> ${deltaTag(r.stiff,BASE&&BASE.stiff,'high')}`);
+  set('m-stress',   `${fmt(r.sigmaH,0)}<u>MPa</u>`);
+  const sfstate = r.safety<1?'bad':(r.safety<1.2?'warn':'');
+  const sfcue = sfstate==='bad'?` <u>${t('overload')}</u>` : sfstate==='warn'?` <u>${t('tight')}</u>` : '';
+  set('m-safety',   `${fmt(r.safety,2)}<u>×</u>${sfcue}`, sfstate);
   set('m-ripple',   `${fmt(r.ripple,1)}<u>µrad</u> ${deltaTag(r.ripple,BASE&&BASE.ripple,'ripple')}`);
   const mstate = r.margin<=0?'bad':(r.margin<0.5?'warn':'');
   const mcue = mstate==='bad'?` <u>${t('jamword')}</u>` : mstate==='warn'?` <u>${t('tight')}</u>` : '';
@@ -734,6 +788,7 @@ function applyGeometry(){
   TOL=clampNum(+I('g-tol').value||15, 1, 80)/1000;
   MACH=clampNum(+I('g-mach').value||0, 0, 20)/1000;
   T_RATED=clampNum(+I('g-T').value||30, 1, 500);
+  readSpec();
   rebuildPins();
   ROT_SIGN=pickRotSign();
   I('warn').classList.toggle('on', GEOM_WORST>0.003);
@@ -741,6 +796,11 @@ function applyGeometry(){
   I('ratio').textContent=t('mesh_aux').replace('{R}', N);
   invalidateOpt();      // the current front was for the old geometry
   afterChange();
+}
+function readSpec(){   // durability / lost-motion spec — affects metrics only, not the profile or pins
+  L_TOOTH=clampNum(+I('g-thick').value||10, 1, 100);
+  C_BEAR =clampNum(+I('g-cbear').value||0, 0, 100)/1000;
+  C_OUT  =clampNum(+I('g-cout').value||0, 0, 100)/1000;
 }
 function syncSliders(){
   I('s-offset').value=state.offset*1e3; I('v-offset').textContent=(state.offset*1e3).toFixed(1)+' µm';
@@ -761,6 +821,7 @@ document.querySelectorAll('.presets button').forEach(b=>b.addEventListener('clic
 I('s-offset').addEventListener('input',e=>{ state.offset=clampNum(+e.target.value/1e3,-0.1,-0.015); afterChange(); });
 for(let k=1;k<=NK;k++){ I('s-c'+k).addEventListener('input',e=>{ state.coeffs[k-1]=+e.target.value/1e3; afterChange(); }); }
 ['g-Rb','g-Rr','g-E','g-N','g-tol','g-mach','g-T'].forEach(id=>I(id).addEventListener('input',applyGeometry));
+['g-thick','g-cbear','g-cout'].forEach(id=>I(id).addEventListener('input',()=>{ readSpec(); scheduleMetrics(); }));
 
 I('play').addEventListener('click',()=>{ state.playing=!state.playing; I('play').textContent=playLabel(); I('play').setAttribute('aria-pressed',state.playing); });
 I('speed').addEventListener('input',e=>{ state.speed=+e.target.value/100; });
@@ -802,13 +863,20 @@ function meshState(prof,psi){
   var cx=-E*Math.cos(psi), cy=-E*Math.sin(psi), a=ROT*psi/N, co=Math.cos(a), si=Math.sin(a);
   var WX=new Float64Array(n), WY=new Float64Array(n);
   for(var i=0;i<n;i++){ WX[i]=co*X[i]-si*Y[i]+cx; WY[i]=si*X[i]+co*Y[i]+cy; }
-  var gaps=[],arms=[],cpx=[],cpy=[];
+  var gaps=[],arms=[],cpx=[],cpy=[],invre=[];
   for(var j=0;j<Np;j++){ var px=PINS[j][0],py=PINS[j][1], best=Infinity, bi=0;
     for(var i2=0;i2<n;i2++){ var ex=WX[i2]-px, ey=WY[i2]-py, dd=ex*ex+ey*ey; if(dd<best){best=dd;bi=i2;} }
     var wx=WX[bi], wy=WY[bi], dist=Math.hypot(wx-px,wy-py); gaps.push(dist-Rr);
-    var nxj=(px-wx)/dist, nyj=(py-wy)/dist; arms.push((wx-cx)*nyj-(wy-cy)*nxj); cpx.push(wx); cpy.push(wy); }
-  return {gaps:gaps,arms:arms,cpx:cpx,cpy:cpy};
+    var nxj=(px-wx)/dist, nyj=(py-wy)/dist; arms.push((wx-cx)*nyj-(wy-cy)*nxj); cpx.push(wx); cpy.push(wy);
+    invre.push(contactInvRe(WX,WY,bi,wx,wy,px,py)); }
+  return {gaps:gaps,arms:arms,cpx:cpx,cpy:cpy,invre:invre};
 }
+function contactInvRe(WX,WY,bi,wx,wy,px,py){ var n=WX.length, bm=(bi-1+n)%n, bp=(bi+1)%n;
+  var tx=(WX[bp]-WX[bm])*0.5, ty=(WY[bp]-WY[bm])*0.5, ax=WX[bp]-2*wx+WX[bm], ay=WY[bp]-2*wy+WY[bm];
+  var sp=Math.hypot(tx,ty)||1e-9, kap=Math.abs((tx*ay-ty*ax)/(sp*sp*sp)), rho=kap>1e-9?1/kap:1e6;
+  var concave=(ax*(px-wx)+ay*(py-wy))>0, invRe=concave?Math.abs(1/Rr-1/rho):(1/Rr+1/rho);
+  return invRe<1e-3?1e-3:invRe; }
+function hertzMaxMPa(F,invre){ var sm=0; for(var j=0;j<F.length;j++){ if(F[j]>0){ var s=Math.sqrt((F[j]/L_TOOTH)*ESTAR*invre[j]/Math.PI); if(s>sm)sm=s; } } return sm; }
 function playRange(gaps,arms,tol){ tol=tol||0; var hi=Infinity, lo=-Infinity;
   for(var j=0;j<gaps.length;j++){ var g=gaps[j]-tol, aa=arms[j]; if(aa>1e-9)hi=Math.min(hi,g/aa); else if(aa<-1e-9)lo=Math.max(lo,g/aa); }
   return [lo,hi]; }
@@ -821,19 +889,20 @@ function windup(gaps,arms){ var T=T_RATED*1000, hi=playRange(gaps,arms)[1];
   return {b:b,k:k,ne:ne,F:F}; }
 function evalFast(offset,coeffs){
   var nPts=1800, ns=14, prof=profile(offset,coeffs,nPts), arcmin=180/Math.PI*60;
-  var plays=[],margins=[],rmargins=[],ks=[],bs=[],nes=[], paMax=0;
+  var plays=[],margins=[],rmargins=[],ks=[],bs=[],nes=[], paMax=0, sigMax=0;
   for(var i=0;i<ns;i++){ var psi=2*Math.PI/N*i/ns, ms=meshState(prof,psi);
     var pr=playRange(ms.gaps,ms.arms); plays.push(pr[1]-pr[0]);
     var pm=playRange(ms.gaps,ms.arms,TOL); margins.push(pm[1]-pm[0]);
     var pm2=playRange(ms.gaps,ms.arms,TOL+MACH); rmargins.push(pm2[1]-pm2[0]);
     var w=windup(ms.gaps,ms.arms); ks.push(w.k); bs.push(w.b); nes.push(w.ne);
+    var sg=hertzMaxMPa(w.F,ms.invre); if(sg>sigMax)sigMax=sg;
     var fmax=1e-9; for(var j=0;j<Np;j++) if(w.F[j]>fmax)fmax=w.F[j];
     for(var j=0;j<Np;j++){ if(w.F[j]>0.10*fmax){ var px=PINS[j][0],py=PINS[j][1], nx=px-ms.cpx[j], ny=py-ms.cpy[j], nn=Math.hypot(nx,ny);
       if(nn>1e-9){ var phi=Math.atan2(py,px), c=Math.abs((nx/nn)*(-Math.sin(phi))+(ny/nn)*Math.cos(phi)); var a=Math.acos(Math.min(1,Math.max(0,c)))*180/Math.PI; if(a>paMax)paMax=a; } } }
   }
   return { backlash:Math.max.apply(null,plays)*arcmin, stiff:Math.min.apply(null,ks)/1e3/arcmin,
            ripple:(Math.max.apply(null,bs)-Math.min.apply(null,bs))*1e6, margin:Math.min.apply(null,margins)*arcmin,
-           rmargin:Math.min.apply(null,rmargins)*arcmin, n_eng:Math.min.apply(null,nes), maxPA:paMax };
+           rmargin:Math.min.apply(null,rmargins)*arcmin, n_eng:Math.min.apply(null,nes), maxPA:paMax, sigmaH:sigMax };
 }
 var LO=[-0.10,-0.04,-0.04,-0.04,-0.04], HI=[-0.015,0.04,0.04,0.04,0.04], D=5, POP=48, GEN=44, SEEDS=[];
 function rnd(a,b){return a+Math.random()*(b-a);}
@@ -867,7 +936,7 @@ function mutate(x){ for(var i=0;i<D;i++) if(Math.random()<0.25) x[i]=clamp(x[i]+
 function frontOut(pop){ var feas=pop.filter(function(p){return p.cv===0;});
   var nd=feas.filter(function(p,i){ for(var j=0;j<feas.length;j++){ if(j!==i && dom(feas[j],p)) return false; } return true; });
   var out=[]; nd.forEach(function(p){ if(!out.some(function(q){return Math.abs(q.backlash-p.backlash)<0.05 && Math.abs(q.stiff-p.stiff)<0.2;}))
-    out.push({offset:p.x[0],coeffs:p.x.slice(1),backlash:p.backlash,stiff:p.stiff,ripple:p.ripple,maxPA:p.maxPA,margin:p.margin,rmargin:p.rmargin,n_eng:p.n_eng}); });
+    out.push({offset:p.x[0],coeffs:p.x.slice(1),backlash:p.backlash,stiff:p.stiff,ripple:p.ripple,maxPA:p.maxPA,margin:p.margin,rmargin:p.rmargin,n_eng:p.n_eng,sigmaH:p.sigmaH}); });
   return out; }
 function run(){
   var pop=[];  // seed with known-good designs first, then fill with random exploration
@@ -885,7 +954,7 @@ function run(){
   }
   postMessage({type:'done', pct:100, front:frontOut(pop)});
 }
-onmessage=function(e){ var g=e.data; Rb=g.Rb;Rr=g.Rr;E=g.E;N=g.N;M=g.M;Np=g.Np;TOL=g.TOL;MACH=g.MACH||0;T_RATED=g.T_RATED;K_CONTACT=g.K_CONTACT;ROT=g.ROT;PINS=g.PINS;NK=g.NK;SEEDS=g.SEEDS||[]; run(); };
+onmessage=function(e){ var g=e.data; Rb=g.Rb;Rr=g.Rr;E=g.E;N=g.N;M=g.M;Np=g.Np;TOL=g.TOL;MACH=g.MACH||0;T_RATED=g.T_RATED;K_CONTACT=g.K_CONTACT;ROT=g.ROT;PINS=g.PINS;NK=g.NK;SEEDS=g.SEEDS||[];L_TOOTH=g.L_TOOTH||10;ESTAR=g.ESTAR||115385; run(); };
 `;
 
 function runOptimize(){
@@ -899,10 +968,7 @@ function runOptimize(){
     const m=e.data; OPT.front=m.front||[];
     if(m.type==='progress'){ I('opt-stat').textContent=`${m.pct}%  ·  ${OPT.front.length}`; drawOptPlot(); return; }
     OPT.running=false; btn.disabled=false; btn.textContent=t('opt_run'); stopWorker();
-    OPT.front.sort((a,b)=>a.backlash-b.backlash);
-    I('opt-stat').textContent = OPT.front.length
-      ? t('opt_done').replace('{n}',OPT.front.length).replace('{b}',OPT.front[0].backlash.toFixed(2)) : t('opt_none');
-    if(OPT.front.length){ OPT.sel=kneeIndex(OPT.front); showPick(); }
+    if(OPT.front.length){ applyGoalPick(true); } else { I('opt-stat').textContent=t('opt_none'); }
     drawOptPlot();
   };
   wk.onerror=(err)=>{ OPT.running=false; btn.disabled=false; btn.textContent=t('opt_run'); stopWorker();
@@ -913,7 +979,24 @@ function runOptimize(){
   for(const p of Object.values(PRESETS)) SEEDS.push([p.offset].concat(p.coeffs));
   SEEDS.push([state.offset].concat(state.coeffs.slice(0,NK)));
   for(let off=-0.017; off>=-0.098; off-=0.006){ SEEDS.push([off,-0.0012,-0.0037,0,0]); SEEDS.push([off,0,0,0,0]); }
-  wk.postMessage({ Rb,Rr,E,N,M,Np,TOL,MACH,T_RATED,K_CONTACT,ROT:ROT_SIGN, PINS, NK, SEEDS });
+  wk.postMessage({ Rb,Rr,E,N,M,Np,TOL,MACH,T_RATED,K_CONTACT,ROT:ROT_SIGN, PINS, NK, SEEDS, L_TOOTH, ESTAR });
+}
+// goal-driven: pick the front design that meets the target backlash with the most stiffness (else the
+// lowest-backlash one), report whether the target is reachable at the current tolerance + machining error,
+// and — after a fresh search — load it straight into the sliders / SolidWorks export.
+function applyGoalPick(autoload){
+  if(!OPT.front.length) return;
+  OPT.front.sort((a,b)=>a.backlash-b.backlash);
+  const goal=clampNum(+I('opt-goal').value||3, 0.5, 30);
+  const meets=OPT.front.filter(d=>d.backlash<=goal);
+  OPT.sel = meets.length ? OPT.front.indexOf(meets.reduce((a,b)=>b.stiff>a.stiff?b:a)) : 0;
+  const d=OPT.front[OPT.sel], best=OPT.front[0].backlash;
+  const totNow=(TOL+MACH)*1e3, need=best>1e-9? totNow*goal/best : totNow;   // self-calibrated linear estimate
+  I('opt-stat').textContent = meets.length
+    ? t('opt_hit').replace('{b}',d.backlash.toFixed(2)).replace('{e}',(MACH*1e3).toFixed(0))
+    : t('opt_miss').replace('{b}',best.toFixed(2)).replace('{g}',goal).replace('{now}',totNow.toFixed(0)).replace('{need}',need.toFixed(0));
+  if(autoload){ state.offset=d.offset; state.coeffs=d.coeffs.slice(); afterChange(); }
+  showPick();
 }
 function showPick(){
   const el=I('opt-pick'); if(OPT.sel<0||!OPT.front[OPT.sel]){ el.innerHTML=''; return; }
@@ -923,6 +1006,7 @@ function showPick(){
   el.innerHTML =
     row(t('m_backlash'), d.backlash.toFixed(2)+"'")+
     row(t('m_stiff'), d.stiff.toFixed(1)+' N·m/′')+
+    (d.sigmaH!=null?row(t('m_stress'), d.sigmaH.toFixed(0)+' MPa'):'')+
     row(t('m_ripple'), d.ripple.toFixed(1)+' µrad')+
     row(paLbl, d.maxPA.toFixed(1)+'°')+
     row(t('m_margin'), d.margin.toFixed(2)+"'")+
@@ -957,6 +1041,7 @@ I('optplot').addEventListener('click',e=>{ if(!OPT.pts.length) return;
   let bi=-1,bd=400; for(let i=0;i<OPT.pts.length;i++){ const dx=OPT.pts[i][0]-mx,dy=OPT.pts[i][1]-my,dd=dx*dx+dy*dy; if(dd<bd){bd=dd;bi=i;} }
   if(bi>=0){ OPT.sel=bi; drawOptPlot(); showPick(); } });
 I('opt-run').addEventListener('click',runOptimize);
+I('opt-goal').addEventListener('input',()=>{ if(OPT.front.length && !OPT.running) applyGoalPick(false); });
 
 // ============================ animation ============================
 let last=performance.now();

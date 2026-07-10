@@ -56,8 +56,11 @@ Everything the RV-reducer literature reports, from one model:
 
 | Metric | Meaning | Better |
 |---|---|---|
-| **Backlash** | lost motion / angular play [arcmin] | lower |
+| **Backlash** | mesh-only lost motion / angular play [arcmin] | lower |
+| **System lost motion** | mesh + input-bearing + output-coupling clearance, referred to the output [arcmin] | lower |
 | **Torsional stiffness** | torque per unit wind-up [N·m/arcmin] | higher |
+| **Contact stress** | peak Hertz line-contact pressure on the loaded pin [MPa] | lower |
+| **Safety factor** | contact-fatigue limit (≈1500 MPa) ÷ peak contact stress | higher (>1 = holds) |
 | **Ripple** | loaded transmission-error swing over a mesh cycle [µrad] | lower |
 | **Pressure angle** | force-vs-motion angle at loaded contacts [deg] | lower |
 | **Tolerance / robust margin** | free play left under the ±tolerance stack [arcmin] | higher (>0 = doesn't jam) |
