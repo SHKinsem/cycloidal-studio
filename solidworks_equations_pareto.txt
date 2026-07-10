@@ -1,0 +1,11 @@
+PARETO KNEE — 4-harmonic modification, SolidWorks Equation Driven Curve
+offset=-0.04799  c=[-0.02884,-0.01663,-0.01069,-0.00351] mm
+metrics: backlash=7.78' stiff=28.7 ripple=42.6urad maxPA=52.5deg robustMargin=1.70'
+
+X(t):
+34.0*cos(t)+1.5*cos(19*t) + ( (-0.047993 + -0.02884*cos(18*t) + -0.016628*cos(36*t) + -0.010691*cos(54*t) + -0.003514*cos(72*t)) - 2.5 )*( 34.0*cos(t)+1.5*19*cos(19*t) )/sqrt( (-34.0*sin(t)-1.5*19*sin(19*t))^2 + (34.0*cos(t)+1.5*19*cos(19*t))^2 )
+
+Y(t):
+34.0*sin(t)+1.5*sin(19*t) + ( (-0.047993 + -0.02884*cos(18*t) + -0.016628*cos(36*t) + -0.010691*cos(54*t) + -0.003514*cos(72*t)) - 2.5 )*( 34.0*sin(t)+1.5*19*sin(19*t) )/sqrt( (-34.0*sin(t)-1.5*19*sin(19*t))^2 + (34.0*cos(t)+1.5*19*cos(19*t))^2 )
+
+t: 0 .. 6.28318, points: 500
