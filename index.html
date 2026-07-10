@@ -161,6 +161,26 @@
   .export .how { font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); line-height: 1.7; }
   .export .how b { color: var(--ink-2); font-weight: 500; }
 
+  /* ---- optimize ---- */
+  .optbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+  button.optbtn {
+    font-family: var(--mono); font-size: 14px; color: var(--bg); background: var(--green);
+    border: 0; border-radius: 7px; padding: 10px 18px; cursor: pointer; font-weight: 600;
+    transition: filter .15s;
+  }
+  button.optbtn:hover { filter: brightness(1.08); }
+  button.optbtn:disabled { background: var(--line-2); color: var(--ink-3); cursor: default; filter: none; }
+  button.optbtn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .optstat { font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); flex: 1; min-width: 220px; }
+  .optgrid { display: grid; grid-template-columns: 1.4fr .6fr; gap: 16px; }
+  @media (max-width: 720px){ .optgrid { grid-template-columns: 1fr; } }
+  #optplot { display: block; width: 100%; aspect-ratio: 2 / 1; }
+  .optpick { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); border-left: 1px solid var(--line); padding-left: 14px; }
+  .optpick .row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
+  .optpick .row b { color: var(--ink); font-weight: 500; }
+  .optpick .muted { color: var(--ink-3); }
+  .optpick .load { margin-top: 10px; font-family: var(--mono); font-size: 12.5px; color: var(--bg); background: var(--green); border: 0; border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+
   /* CJK doesn't benefit from the wide tracking meant for uppercase Latin */
   :root:lang(zh) .eyebrow { letter-spacing: .1em; }
   :root:lang(zh) .setup h2, :root:lang(zh) .panel h2 { letter-spacing: .06em; }
@@ -269,6 +289,22 @@
         <span><i class="swatch" style="background:var(--orange)"></i><span data-i18n="lg_uniform">uniform</span></span>
         <span><i class="swatch" style="background:var(--green)"></i><span data-i18n="lg_yours">your design</span></span>
         <span><i class="swatch" style="background:var(--danger)"></i><span data-i18n="lg_tol">tolerance budget</span></span>
+      </div>
+    </div>
+
+    <!-- optimize (live, this geometry) -->
+    <div class="panel full">
+      <h2><span data-i18n="opt_h">Optimize for this geometry</span> <span class="aux" data-i18n="opt_sub">live multi-objective search in your browser</span></h2>
+      <div class="optbar">
+        <button id="opt-run" class="optbtn" data-i18n="opt_run">◆ Find optimal modifications</button>
+        <span class="optstat" id="opt-stat">Set your geometry above, then search. Click a point to load it into the sliders.</span>
+      </div>
+      <div class="optgrid">
+        <canvas id="optplot"></canvas>
+        <div class="optpick" id="opt-pick"></div>
+      </div>
+      <div class="legend">
+        <span><i class="swatch" style="background:var(--green)"></i><span data-i18n="opt_lg">non-dominated designs (backlash ↔ stiffness, colour = pressure angle)</span></span>
       </div>
     </div>
 
@@ -451,8 +487,21 @@ const TXT = {
   copied:       { en:'✓ copied', zh:'✓ 已复制' },
   tight:        { en:'· tight', zh:'· 偏紧' },
   jamword:      { en:'· jam', zh:'· 卡死' },
-  pareto_link:  { en:'→ Explore the multi-objective Pareto front (NSGA-II, robust + manufacturable)',
-                  zh:'→ 浏览多目标帕累托前沿 (NSGA-II, 鲁棒 + 可加工)' },
+  pareto_link:  { en:'→ Or browse the reference Python NSGA-II front (fixed default geometry, K=4 harmonics, robust + manufacturable)',
+                  zh:'→ 或浏览参考用的 Python NSGA-II 前沿 (固定默认几何, K=4 谐波, 鲁棒 + 可加工)' },
+  opt_h:        { en:'Optimize for this geometry', zh:'为当前几何搜索最优' },
+  opt_sub:      { en:'live multi-objective search in your browser', zh:'浏览器内实时多目标搜索' },
+  opt_run:      { en:'◆ Find optimal modifications', zh:'◆ 搜索最优修型' },
+  opt_running:  { en:'searching…', zh:'搜索中…' },
+  opt_hint:     { en:'Set your geometry above, then search. Click a point to load it into the sliders.',
+                  zh:'先在上方设好几何, 再搜索。点击散点即可载入到滑块。' },
+  opt_stale:    { en:'⟳ geometry changed — re-run to update the front', zh:'⟳ 几何已改 — 重新搜索以更新前沿' },
+  opt_done:     { en:'{n} designs · lowest backlash {b}′ at this tolerance · click one to load',
+                  zh:'{n} 个设计 · 当前公差下最低背隙 {b}′ · 点击载入' },
+  opt_none:     { en:'no feasible design in range — loosen tolerance or geometry', zh:'范围内无可行解 — 放宽公差或几何' },
+  opt_lg:       { en:'non-dominated designs (backlash ↔ stiffness, colour = pressure angle)',
+                  zh:'非支配设计 (背隙 ↔ 刚度, 颜色 = 压力角)' },
+  opt_load:     { en:'load into sliders →', zh:'载入滑块 →' },
   how:          { en:'In SolidWorks: Insert → Curve → Equation Driven Curve → Parametric. Set t from 0 to 6.28318, paste X(t) and Y(t). Or import the CSV via Insert → Curve → Curve Through XYZ Points, then Fit Spline.',
                   zh:'在 SolidWorks 中：插入 → 曲线 → 方程驱动曲线 → 参数化。设 t 从 0 到 6.28318，粘贴 X(t) 与 Y(t)。或用 插入 → 曲线 → 通过 XYZ 点的曲线 导入 CSV，再用 拟合样条。' },
   c_tip:        { en:'tip', zh:'齿顶' },
@@ -651,6 +700,7 @@ function applyLang(lang){
   I('lang-zh').classList.toggle('on', lang==='zh');
   updateMetrics();
   drawTooth(); drawClearance();
+  if(typeof OPT!=='undefined'){ if(!OPT.ran) I('opt-stat').textContent=t('opt_hint'); drawOptPlot(); if(OPT.sel>=0) showPick(); }
 }
 
 // ============================ geometry / interaction ============================
@@ -667,6 +717,7 @@ function applyGeometry(){
   I('warn').classList.toggle('on', GEOM_WORST>0.003);
   BASE=evaluate(-0.075,0.05,0,8000,'pertooth');
   I('ratio').textContent=t('mesh_aux').replace('{R}', N);
+  invalidateOpt();      // the current front was for the old geometry
   afterChange();
 }
 function syncSliders(){
@@ -701,6 +752,114 @@ I('dl-csv').addEventListener('click',downloadCSV);
 I('lang-en').addEventListener('click',()=>applyLang('en'));
 I('lang-zh').addEventListener('click',()=>applyLang('zh'));
 
+// ============================ in-browser optimizer (live, current geometry) ============================
+const OPT = { front:[], sel:-1, running:false, ran:false, pts:[] };
+// fast, reduced-resolution evaluate incl. pressure angle (uses meshState contact points)
+function evalFast(offset,s1,s2){
+  const nPts=2200, ns=16, prof=profile(offset,s1,s2,nPts,'harmonic'), arcmin=180/Math.PI*60;
+  const plays=[],margins=[],ks=[],bs=[],nes=[]; let paMax=0;
+  for(let i=0;i<ns;i++){
+    const psi=2*Math.PI/N*i/ns, ms=meshState(prof,psi);
+    const [lo,hi]=playRange(ms.gaps,ms.arms); plays.push(hi-lo);
+    const [tlo,thi]=playRange(ms.gaps,ms.arms,TOL); margins.push(thi-tlo);
+    const w=windup(ms.gaps,ms.arms); ks.push(w.k); bs.push(w.b); nes.push(w.ne);
+    let fmax=1e-9; for(let j=0;j<Np;j++) if(w.F[j]>fmax) fmax=w.F[j];
+    for(let j=0;j<Np;j++){ if(w.F[j]>0.10*fmax){
+      const px=PINS[j][0],py=PINS[j][1], nx=px-ms.cpx[j], ny=py-ms.cpy[j], nn=Math.hypot(nx,ny);
+      if(nn>1e-9){ const phi=Math.atan2(py,px), c=Math.abs((nx/nn)*(-Math.sin(phi))+(ny/nn)*Math.cos(phi));
+        const a=Math.acos(Math.min(1,Math.max(0,c)))*180/Math.PI; if(a>paMax) paMax=a; } }
+    }
+  }
+  return { offset,s1,s2, backlash:Math.max(...plays)*arcmin, stiff:Math.min(...ks)/1e3/arcmin,
+           ripple:(Math.max(...bs)-Math.min(...bs))*1e6, margin:Math.min(...margins)*arcmin,
+           n_eng:Math.min(...nes), maxPA:paMax };
+}
+const dom4=(a,b)=>{ const A=[a.backlash,-a.stiff,a.ripple,a.maxPA], B=[b.backlash,-b.stiff,b.ripple,b.maxPA];
+  let le=true,lt=false; for(let k=0;k<4;k++){ if(A[k]>B[k]+1e-9)le=false; if(A[k]<B[k]-1e-9)lt=true; } return le&&lt; };
+function kneeIndex(F){
+  const col=k=>F.map(d=>d[k]); const nn=(x,lo)=>{const mn=Math.min(...x),mx=Math.max(...x),rg=(mx-mn)||1;return x.map(v=>lo?(v-mn)/rg:(mx-v)/rg);};
+  const nb=nn(col('backlash'),true), nsf=nn(col('stiff'),false), nr=nn(col('ripple'),true), npa=nn(col('maxPA'),true);
+  let bi=0,bd=1e9; for(let i=0;i<F.length;i++){const d=nb[i]**2+nsf[i]**2+nr[i]**2+npa[i]**2; if(d<bd){bd=d;bi=i;}} return bi;
+}
+function invalidateOpt(){ if(!OPT.ran) return; OPT.front=[]; OPT.sel=-1; I('opt-stat').textContent=t('opt_stale'); I('opt-pick').innerHTML=''; drawOptPlot(); }
+
+async function runOptimize(){
+  if(OPT.running) return;
+  OPT.running=true; OPT.ran=true; OPT.front=[]; OPT.sel=-1; I('opt-pick').innerHTML='';
+  const btn=I('opt-run'); btn.disabled=true; btn.textContent=t('opt_running');
+  const LO=[-0.10,-0.04,-0.04], HI=[-0.015,0.04,0.04];
+  const rnd=(a,b)=>a+Math.random()*(b-a), cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const randD=()=>[rnd(LO[0],HI[0]),rnd(LO[1],HI[1]),rnd(LO[2],HI[2])];
+  const mut=p=>p.map((v,i)=>cl(v+(Math.random()-0.5)*(HI[i]-LO[i])*0.30,LO[i],HI[i]));
+  const consider=p=>{
+    const dmax=p[0]+Math.abs(p[1])+Math.abs(p[2]); if(dmax>-0.005) return;
+    const r=evalFast(p[0],p[1],p[2]);
+    if(!isFinite(r.ripple) || r.margin<0.05 || r.n_eng<2) return;  // just "doesn't jam under tolerance" + carries load
+                                                                    // (low margin = tight/low-backlash but less robust; shown per design)
+    if(OPT.front.some(a=>dom4(a,r))) return;
+    OPT.front=OPT.front.filter(a=>!dom4(r,a));
+    if(!OPT.front.some(a=>Math.abs(a.backlash-r.backlash)<0.06 && Math.abs(a.stiff-r.stiff)<0.25)) OPT.front.push(r);
+  };
+  const GENS=26, POP=30, TOTAL=GENS*POP; let ev=0;
+  for(let g=0; g<GENS; g++){
+    for(let i=0;i<POP;i++){
+      let p;
+      if(g===0 || OPT.front.length===0 || Math.random()<0.3) p=randD();
+      else { const par=OPT.front[Math.floor(Math.random()*OPT.front.length)]; p=mut([par.offset,par.s1,par.s2]); }
+      consider(p); ev++;
+      if(ev%10===0){ I('opt-stat').textContent=`${Math.round(100*ev/TOTAL)}%  ·  ${OPT.front.length}`; drawOptPlot(); await new Promise(r=>setTimeout(r,0)); }
+    }
+  }
+  OPT.front.sort((a,b)=>a.backlash-b.backlash);
+  OPT.running=false; btn.disabled=false; btn.textContent=t('opt_run');
+  I('opt-stat').textContent = OPT.front.length
+    ? t('opt_done').replace('{n}',OPT.front.length).replace('{b}',OPT.front[0].backlash.toFixed(2))
+    : t('opt_none');
+  if(OPT.front.length){ OPT.sel=kneeIndex(OPT.front); showPick(); }
+  drawOptPlot();
+}
+function showPick(){
+  const el=I('opt-pick'); if(OPT.sel<0||!OPT.front[OPT.sel]){ el.innerHTML=''; return; }
+  const d=OPT.front[OPT.sel];
+  const paLbl = state.lang==='zh'?'压力角':'pressure angle';
+  const row=(k,v)=>`<div class="row"><span class="muted">${k}</span><b>${v}</b></div>`;
+  el.innerHTML =
+    row(t('m_backlash'), d.backlash.toFixed(2)+"'")+
+    row(t('m_stiff'), d.stiff.toFixed(1)+' N·m/′')+
+    row(t('m_ripple'), d.ripple.toFixed(1)+' µrad')+
+    row(paLbl, d.maxPA.toFixed(1)+'°')+
+    row(t('m_margin'), d.margin.toFixed(2)+"'")+
+    row(t('m_teeth'), d.n_eng+' / '+Np)+
+    `<button class="load" id="opt-load">${t('opt_load')}</button>`;
+  I('opt-load').onclick=()=>{ state.offset=d.offset; state.s1=d.s1; state.s2=d.s2; afterChange(); };
+}
+const VIRID=[[253,231,37],[94,201,98],[33,145,140],[59,82,139],[68,1,84]];
+function optColor(tt){ tt=Math.max(0,Math.min(1,tt)); const x=tt*4,i=Math.floor(x),f=x-i,a=VIRID[i],b=VIRID[Math.min(i+1,4)]; return `rgb(${a[0]+(b[0]-a[0])*f|0},${a[1]+(b[1]-a[1])*f|0},${a[2]+(b[2]-a[2])*f|0})`; }
+function drawOptPlot(){
+  const {ctx,w,h}=fit(I('optplot')); ctx.clearRect(0,0,w,h);
+  const F=OPT.front, padL=48,padR=12,padT=12,padB=34;
+  if(!F.length){ ctx.fillStyle=COL['ink-3']; ctx.font='13px '+css('--mono'); ctx.textAlign='center';
+    ctx.fillText(OPT.running?'…':'—', w/2, h/2); OPT.pts=[]; return; }
+  const B=F.map(d=>d.backlash), S=F.map(d=>d.stiff), P=F.map(d=>d.maxPA);
+  const bmn=Math.min(...B),bmx=Math.max(...B),smn=Math.min(...S),smx=Math.max(...S),pmn=Math.min(...P),pmx=Math.max(...P);
+  const X=v=>padL+(v-bmn)/((bmx-bmn)||1)*(w-padL-padR), Y=v=>padT+(smx-v)/((smx-smn)||1)*(h-padT-padB);
+  ctx.font='11px '+css('--mono'); ctx.strokeStyle=COL.line; ctx.lineWidth=1; ctx.textAlign='right'; ctx.textBaseline='middle';
+  for(let gi=0;gi<=3;gi++){ const v=smn+(smx-smn)*gi/3; ctx.beginPath();ctx.moveTo(padL,Y(v));ctx.lineTo(w-padR,Y(v));ctx.stroke(); ctx.fillStyle=COL['ink-3']; ctx.fillText(v.toFixed(0),padL-6,Y(v)); }
+  ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle=COL['ink-3'];
+  for(let gi=0;gi<=3;gi++){ const v=bmn+(bmx-bmn)*gi/3; ctx.fillText(v.toFixed(1),X(v),h-20); }
+  ctx.fillStyle=COL['ink-2']; ctx.fillText(t('m_backlash')+" [']  ↓", w/2, h-5);
+  ctx.save();ctx.translate(13,h/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';ctx.fillText(t('m_stiff')+'  ↑',0,0);ctx.restore();
+  OPT.pts=[];
+  for(let i=0;i<F.length;i++){ const sx=X(B[i]),sy=Y(S[i]); OPT.pts.push([sx,sy]);
+    ctx.beginPath();ctx.arc(sx,sy,i===OPT.sel?7:5,0,2*Math.PI); ctx.fillStyle=optColor((P[i]-pmn)/((pmx-pmn)||1)); ctx.fill();
+    if(i===OPT.sel){ ctx.lineWidth=2.5; ctx.strokeStyle=COL.danger; ctx.stroke(); } }
+}
+I('optplot').addEventListener('click',e=>{ if(!OPT.pts.length) return;
+  const r=e.currentTarget.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+  let bi=-1,bd=400; for(let i=0;i<OPT.pts.length;i++){ const dx=OPT.pts[i][0]-mx,dy=OPT.pts[i][1]-my,dd=dx*dx+dy*dy; if(dd<bd){bd=dd;bi=i;} }
+  if(bi>=0){ OPT.sel=bi; drawOptPlot(); showPick(); } });
+I('opt-run').addEventListener('click',runOptimize);
+
 // ============================ animation ============================
 let last=performance.now();
 function loop(tm){
@@ -708,7 +867,7 @@ function loop(tm){
   if(state.playing){ state.psi=(state.psi+dt*(0.3+state.speed*2.4))%(2*Math.PI); drawMesh(); }
   requestAnimationFrame(loop);
 }
-window.addEventListener('resize',()=>{ drawMesh(); drawTooth(); drawClearance(); });
+window.addEventListener('resize',()=>{ drawMesh(); drawTooth(); drawClearance(); drawOptPlot(); });
 
 // ============================ init ============================
 applyGeometry();      // sets ROT_SIGN, PINS, BASE, meshProf via afterChange
@@ -719,5 +878,7 @@ if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').m
   state.playing=false; I('play').textContent=playLabel(); I('play').setAttribute('aria-pressed','false');
 }
 drawMesh();
+I('opt-stat').textContent=t('opt_hint');
+drawOptPlot();
 requestAnimationFrame(loop);
 </script>
