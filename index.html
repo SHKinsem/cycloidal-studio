@@ -527,14 +527,14 @@ const TXT = {
                   zh:'模型：准静态、刚性盘、线性化接触（K=50 N/µm 每齿）。趋势可靠，绝对值为量级估计。物理模型移植自 optimizer/model.py，未含油膜与动力学。' },
 };
 const NK = 4;   // number of harmonics in the modification δ(θ)=offset+Σ_{k=1}^{NK} c_k·cos(kNθ)
-const state = { offset:-0.0483, coeffs:[-0.0239,-0.0166,-0.0107,-0.0035], psi:0, playing:true, speed:0.45, exag:40, lang:'en' };
+const state = { offset:-0.0209, coeffs:[-0.0012,-0.0037,0,0], psi:0, playing:true, speed:0.45, exag:40, lang:'en' };
 function t(key){ const e=TXT[key]; return e ? (e[state.lang]||e.en) : key; }
 
 // ============================ presets, colors, baseline ============================
 const PRESETS = {
   uniform: { offset:-0.040,  coeffs:[0,0,0,0] },
   deep:    { offset:-0.075,  coeffs:[0,0,0,0] },
-  ga:      { offset:-0.0483, coeffs:[-0.0239,-0.0166,-0.0107,-0.0035] },   // Python K=4 NSGA-II knee
+  ga:      { offset:-0.0209, coeffs:[-0.0012,-0.0037,0,0] },   // low-backlash reverse-bow (5.06', stiff 35.7)
 };
 const css = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
 const COL = {};
@@ -765,9 +765,11 @@ I('lang-zh').addEventListener('click',()=>applyLang('zh'));
 // ============================ in-browser optimizer: NSGA-II in a Web Worker ============================
 const OPT = { front:[], sel:-1, running:false, ran:false, pts:[], worker:null };
 function kneeIndex(F){
+  // knee = closest to the ideal (low backlash, high stiffness) corner. Only these two drive the
+  // highlight (they're the usual priorities); ripple / pressure angle are still shown + colour-coded.
   const col=k=>F.map(d=>d[k]); const nn=(x,lo)=>{const mn=Math.min(...x),mx=Math.max(...x),rg=(mx-mn)||1;return x.map(v=>lo?(v-mn)/rg:(mx-v)/rg);};
-  const nb=nn(col('backlash'),true), nsf=nn(col('stiff'),false), nr=nn(col('ripple'),true), npa=nn(col('maxPA'),true);
-  let bi=0,bd=1e9; for(let i=0;i<F.length;i++){const d=nb[i]**2+nsf[i]**2+nr[i]**2+npa[i]**2; if(d<bd){bd=d;bi=i;}} return bi;
+  const nb=nn(col('backlash'),true), nsf=nn(col('stiff'),false);
+  let bi=0,bd=1e9; for(let i=0;i<F.length;i++){const d=nb[i]**2+nsf[i]**2; if(d<bd){bd=d;bi=i;}} return bi;
 }
 function stopWorker(){ if(OPT.worker){ OPT.worker.terminate(); OPT.worker=null; } }
 function invalidateOpt(){ if(!OPT.ran) return; stopWorker(); OPT.running=false; OPT.front=[]; OPT.sel=-1;
@@ -823,7 +825,7 @@ function evalFast(offset,coeffs){
            ripple:(Math.max.apply(null,bs)-Math.min.apply(null,bs))*1e6, margin:Math.min.apply(null,margins)*arcmin,
            n_eng:Math.min.apply(null,nes), maxPA:paMax };
 }
-var LO=[-0.10,-0.04,-0.04,-0.04,-0.04], HI=[-0.015,0.04,0.04,0.04,0.04], D=5, POP=48, GEN=44;
+var LO=[-0.10,-0.04,-0.04,-0.04,-0.04], HI=[-0.015,0.04,0.04,0.04,0.04], D=5, POP=48, GEN=44, SEEDS=[];
 function rnd(a,b){return a+Math.random()*(b-a);}
 function clamp(v,a,b){return v<a?a:(v>b?b:v);}
 function newx(){var x=[];for(var i=0;i<D;i++)x.push(rnd(LO[i],HI[i]));return x;}
@@ -858,7 +860,10 @@ function frontOut(pop){ var feas=pop.filter(function(p){return p.cv===0;});
     out.push({offset:p.x[0],coeffs:p.x.slice(1),backlash:p.backlash,stiff:p.stiff,ripple:p.ripple,maxPA:p.maxPA,margin:p.margin,n_eng:p.n_eng}); });
   return out; }
 function run(){
-  var pop=[]; for(var i=0;i<POP;i++)pop.push(evalx(newx()));
+  var pop=[];  // seed with known-good designs first, then fill with random exploration
+  for(var s=0;s<SEEDS.length && pop.length<POP;s++){ var sx=SEEDS[s].slice(0,D); while(sx.length<D)sx.push(0);
+    for(var i=0;i<D;i++)sx[i]=clamp(sx[i],LO[i],HI[i]); pop.push(evalx(sx)); }
+  while(pop.length<POP)pop.push(evalx(newx()));
   for(var gen=0; gen<GEN; gen++){
     var off=[]; while(off.length<POP){ var cs=cross(tour(pop),tour(pop)); off.push(evalx(mutate(cs[0]))); if(off.length<POP)off.push(evalx(mutate(cs[1]))); }
     var R=pop.concat(off); var fronts=ndsort(R); var np=[], fi=0;
@@ -870,7 +875,7 @@ function run(){
   }
   postMessage({type:'done', pct:100, front:frontOut(pop)});
 }
-onmessage=function(e){ var g=e.data; Rb=g.Rb;Rr=g.Rr;E=g.E;N=g.N;M=g.M;Np=g.Np;TOL=g.TOL;T_RATED=g.T_RATED;K_CONTACT=g.K_CONTACT;ROT=g.ROT;PINS=g.PINS;NK=g.NK; run(); };
+onmessage=function(e){ var g=e.data; Rb=g.Rb;Rr=g.Rr;E=g.E;N=g.N;M=g.M;Np=g.Np;TOL=g.TOL;T_RATED=g.T_RATED;K_CONTACT=g.K_CONTACT;ROT=g.ROT;PINS=g.PINS;NK=g.NK;SEEDS=g.SEEDS||[]; run(); };
 `;
 
 function runOptimize(){
@@ -892,7 +897,13 @@ function runOptimize(){
   };
   wk.onerror=(err)=>{ OPT.running=false; btn.disabled=false; btn.textContent=t('opt_run'); stopWorker();
     I('opt-stat').textContent='optimizer error (see console)'; console.error(err); };
-  wk.postMessage({ Rb,Rr,E,N,M,Np,TOL,T_RATED,K_CONTACT,ROT:ROT_SIGN, PINS, NK });
+  // seed the search with known-good designs so the big 5-parameter space converges reliably at the
+  // low-backlash / high-stiffness corner: the presets, the current design, and an offset sweep.
+  const SEEDS=[];
+  for(const p of Object.values(PRESETS)) SEEDS.push([p.offset].concat(p.coeffs));
+  SEEDS.push([state.offset].concat(state.coeffs.slice(0,NK)));
+  for(let off=-0.017; off>=-0.098; off-=0.006){ SEEDS.push([off,-0.0012,-0.0037,0,0]); SEEDS.push([off,0,0,0,0]); }
+  wk.postMessage({ Rb,Rr,E,N,M,Np,TOL,T_RATED,K_CONTACT,ROT:ROT_SIGN, PINS, NK, SEEDS });
 }
 function showPick(){
   const el=I('opt-pick'); if(OPT.sel<0||!OPT.front[OPT.sel]){ el.innerHTML=''; return; }

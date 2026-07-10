@@ -25,8 +25,8 @@ deploy to GitHub Pages in two clicks.
 
 ## Try it
 
-- **Live demo:** `https://<your-username>.github.io/cycloidal-studio/` *(after you deploy — see below)*
-- **Locally, no install:** clone the repo and open `index.html` in any modern browser.
+- **Live demo:** **https://shkinsem.github.io/cycloidal-studio/** — no install, runs in the browser.
+- **Locally:** clone the repo and open `index.html` in any modern browser.
 
 ---
 
@@ -36,7 +36,9 @@ deploy to GitHub Pages in two clicks.
 Tune one tooth and watch the whole drive respond, live:
 - **Editable geometry & spec:** pin-circle Rb, pin radius Rr, eccentricity E, lobe count N, tolerance
   stack, rated torque.
-- **Modification** `δ(θ) = offset + s1·cos(Nθ) + s2·cos(2Nθ)` with drag sliders and presets.
+- **Modification** `δ(θ) = offset + Σₖ cₖ·cos(kNθ)` (4 harmonics) with drag sliders and presets.
+- **Live optimizer:** a built-in NSGA-II (runs in a Web Worker, no Python) re-searches the optimum for
+  *your* current geometry in a few seconds — seeded with known-good designs so it converges reliably.
 - **Live metrics:** backlash, torsional stiffness, transmission-error ripple, tolerance margin,
   loaded teeth — recomputed from a real quasi-static loaded-contact model as you drag.
 - **Animated mesh:** the eccentric disk actually runs; loaded teeth glow.
