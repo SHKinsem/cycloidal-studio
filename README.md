@@ -31,22 +31,25 @@ deploy to GitHub Pages in two clicks.
 ## The tool — `index.html`
 
 Tune one tooth and watch the whole drive respond, live:
-- **Editable geometry & spec:** pin-circle Rb, pin radius Rr, eccentricity E, lobe count N, tolerance
-  stack, **machining error ±e**, rated torque.
+- **Editable geometry & spec:** pin-circle Rb, pin radius Rr, eccentricity E, lobe count N, rated torque.
+- **A manufacturing plan instead of abstract tolerances:** pick how each part is made — disk profile
+  (grinding / wire EDM / milling / printing), pins, pin holes, eccentric — and the tool converts each
+  process into a ±µm error source (editable if you know your shop better). Eccentricity error is
+  weighted by a finite-differenced gap sensitivity, not assumed 1:1.
+- **As-built prediction:** a 400-sample Monte-Carlo over those error sources gives the backlash of the
+  units you'd actually machine (typical–95th percentile) plus the jam risk — this number *moves* when
+  you change the plan, unlike the zero-error ideal backlash.
+- **Error budget:** each source's worst-case backlash contribution, ranked, with a "tighten this first"
+  hint — so you know which drawing callout actually buys you arcminutes.
 - **Modification** `δ(θ) = offset + Σₖ cₖ·cos(kNθ)` (4 harmonics) with drag sliders and presets.
-- **Live optimizer:** a built-in NSGA-II (runs in a Web Worker, no Python) re-searches the optimum for
-  *your* current geometry in a few seconds — seeded with known-good designs so it converges reliably.
-  Every result is **robust**: it still assembles at the worst-case machining error you set.
-- **Live metrics:** backlash, torsional stiffness, transmission-error ripple, tolerance margin,
-  **robust margin**, loaded teeth — recomputed from a real quasi-static loaded-contact model as you drag.
+- **Goal-driven optimizer:** a built-in NSGA-II (Web Worker, no Python) searches modifications for
+  *your* geometry and plan, auto-loads the best design, and gives a verdict judged on **as-built**
+  backlash: guaranteed at worst case, met at 95% yield, or unreachable — with a self-calibrated
+  "shrink total error to ±X µm, start with Y" advisory.
 - **Animated mesh:** the eccentric disk actually runs; loaded teeth glow.
 - **One-click SolidWorks export:** copy the equation-driven `X(t)` / `Y(t)` (numbers baked in) or
   download a point-cloud CSV.
 - **EN / 中文** toggle throughout.
-
-The machining-error input is what links backlash to your shop floor: a looser `±e` forces the
-optimizer toward more relief (more backlash but never jams as machined); tightening `±e` and the
-tolerance stack is how you reach sub-3-arcmin designs.
 
 ---
 
@@ -56,14 +59,16 @@ Everything the RV-reducer literature reports, from one model:
 
 | Metric | Meaning | Better |
 |---|---|---|
-| **Backlash** | mesh-only lost motion / angular play [arcmin] | lower |
+| **Backlash** | zero-error ideal mesh lost motion [arcmin] | lower |
+| **As-built backlash** | Monte-Carlo P50–P95 backlash of the units you'd actually machine, + jam risk | lower |
 | **System lost motion** | mesh + input-bearing + output-coupling clearance, referred to the output [arcmin] | lower |
 | **Torsional stiffness** | torque per unit wind-up [N·m/arcmin] | higher |
 | **Contact stress** | peak Hertz line-contact pressure on the loaded pin [MPa] | lower |
 | **Safety factor** | contact-fatigue limit (≈1500 MPa) ÷ peak contact stress | higher (>1 = holds) |
 | **Ripple** | loaded transmission-error swing over a mesh cycle [µrad] | lower |
 | **Pressure angle** | force-vs-motion angle at loaded contacts [deg] | lower |
-| **Tolerance / robust margin** | free play left under the ±tolerance stack [arcmin] | higher (>0 = doesn't jam) |
+| **Worst-case margin** | free play left when every manufacturing error lands at its tightest [arcmin] | higher (>0 = never jams) |
+| **Error budget** | each error source's worst-case backlash contribution, ranked [arcmin] | — (tells you what to tighten) |
 | **Manufacturability** | min concave radius of curvature vs tool radius [mm] | higher |
 | **Loaded teeth** | how many teeth share the rated torque | higher |
 

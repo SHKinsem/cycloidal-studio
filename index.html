@@ -72,6 +72,22 @@
     border: 1px solid var(--hot); background: rgba(250,178,25,.10); border-radius: 6px; padding: 8px 11px; }
   .warnbar.on { display: block; }
 
+  /* ---- manufacturing plan ---- */
+  .mfg { border-top: 1px dashed var(--line); margin-top: 14px; padding-top: 12px; }
+  .mfg h3 { font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); margin: 0 0 10px; font-weight: 500; letter-spacing: .04em; }
+  .mfgfields { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 720px){ .mfgfields { grid-template-columns: repeat(2, 1fr); } }
+  .field select {
+    font-family: var(--mono); font-size: 13px; color: var(--ink); background: var(--panel-2);
+    border: 1px solid var(--line-2); border-radius: 6px; padding: 7px 8px; width: 100%;
+  }
+  .field select:focus-visible { outline: 2px solid var(--green); outline-offset: 0; border-color: var(--green); }
+  .budget { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); margin-top: 12px; line-height: 2; }
+  .budget b { color: var(--ink); font-weight: 500; }
+  .budget .src { display: inline-block; margin-right: 16px; white-space: nowrap; }
+  .budget .bar { display: inline-block; height: 6px; background: var(--green); border-radius: 3px; vertical-align: middle; margin-right: 6px; }
+  .budget .hint { color: var(--hot); white-space: nowrap; }
+
   /* ---- layout ---- */
   .grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 16px; }
   @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
@@ -214,13 +230,52 @@
       <div class="field"><label><span data-i18n="lbl_Rr">pin radius Rr</span> <span class="unit">mm</span></label><input id="g-Rr" type="number" value="2.5" min="0.5" max="12" step="0.1"></div>
       <div class="field"><label><span data-i18n="lbl_E">eccentricity E</span> <span class="unit">mm</span></label><input id="g-E" type="number" value="1.5" min="0.2" max="6" step="0.1"></div>
       <div class="field"><label><span data-i18n="lbl_N">lobes N</span></label><input id="g-N" type="number" value="18" min="6" max="40" step="1"></div>
-      <div class="field"><label><span data-i18n="lbl_tol">tolerance</span> <span class="unit">µm</span></label><input id="g-tol" type="number" value="15" min="1" max="80" step="1"></div>
-      <div class="field"><label><span data-i18n="lbl_mach">mach. error ±</span> <span class="unit">µm</span></label><input id="g-mach" type="number" value="5" min="0" max="20" step="0.5"></div>
       <div class="field"><label><span data-i18n="lbl_T">rated torque</span> <span class="unit">N·m</span></label><input id="g-T" type="number" value="30" min="1" max="500" step="1"></div>
       <div class="field"><label><span data-i18n="opt_target">target backlash</span> <span class="unit">′</span></label><input id="opt-goal" type="number" value="3" min="0.5" max="30" step="0.5"></div>
       <div class="field"><label><span data-i18n="lbl_thick">disk width</span> <span class="unit">mm</span></label><input id="g-thick" type="number" value="10" min="1" max="100" step="0.5"></div>
       <div class="field"><label><span data-i18n="lbl_cbear">bearing clr.</span> <span class="unit">µm</span></label><input id="g-cbear" type="number" value="0" min="0" max="100" step="1"></div>
       <div class="field"><label><span data-i18n="lbl_cout">output clr.</span> <span class="unit">µm</span></label><input id="g-cout" type="number" value="0" min="0" max="100" step="1"></div>
+    </div>
+    <div class="mfg">
+      <h3 data-i18n="mfg_h">Manufacturing plan — pick how each part is made; the ±µm numbers are editable if you know your shop better</h3>
+      <div class="fields mfgfields">
+        <div class="field"><label><span data-i18n="lbl_prof">disk profile</span> <span class="unit">±µm</span></label>
+          <select id="p-prof">
+            <option value="2" data-i18n="pr_grind">profile ground</option>
+            <option value="4" selected data-i18n="pr_wslow">wire EDM · slow</option>
+            <option value="12" data-i18n="pr_wfast">wire EDM · fast</option>
+            <option value="15" data-i18n="pr_mill">CNC milled</option>
+            <option value="60" data-i18n="pr_print">3D printed</option>
+            <option value="c" data-i18n="pr_custom">custom</option>
+          </select>
+          <input id="e-prof" type="number" value="4" min="0" max="100" step="0.5"></div>
+        <div class="field"><label><span data-i18n="lbl_pin">pins</span> <span class="unit">±µm</span></label>
+          <select id="p-pin">
+            <option value="2" selected data-i18n="pn_ground">ground / needle rollers</option>
+            <option value="6" data-i18n="pn_std">dowel pins h7</option>
+            <option value="10" data-i18n="pn_turn">turned</option>
+            <option value="c" data-i18n="pr_custom">custom</option>
+          </select>
+          <input id="e-pin" type="number" value="2" min="0" max="100" step="0.5"></div>
+        <div class="field"><label><span data-i18n="lbl_hole">pin holes</span> <span class="unit">±µm</span></label>
+          <select id="p-hole">
+            <option value="3" data-i18n="ho_jig">jig-bored / ground</option>
+            <option value="4" selected data-i18n="ho_wslow">wire EDM · slow</option>
+            <option value="12" data-i18n="ho_wfast">wire EDM · fast</option>
+            <option value="8" data-i18n="ho_ream">reamed</option>
+            <option value="20" data-i18n="ho_drill">drilled</option>
+            <option value="c" data-i18n="pr_custom">custom</option>
+          </select>
+          <input id="e-hole" type="number" value="4" min="0" max="100" step="0.5"></div>
+        <div class="field"><label><span data-i18n="lbl_ecc">eccentric E</span> <span class="unit">±µm</span></label>
+          <select id="p-ecc">
+            <option value="3" selected data-i18n="ec_grind">ground</option>
+            <option value="8" data-i18n="ec_turn">turned</option>
+            <option value="c" data-i18n="pr_custom">custom</option>
+          </select>
+          <input id="e-ecc" type="number" value="3" min="0" max="100" step="0.5"></div>
+      </div>
+      <div class="budget" id="budget"></div>
     </div>
     <div class="warnbar" id="warn" data-i18n="warn">Geometry undercuts — the unmodified tooth can't mesh with all pins. Reduce E or increase Rb.</div>
   </div>
@@ -275,14 +330,14 @@
       </div>
 
       <div class="metrics">
-        <div class="metric"><span class="k"><span data-i18n="m_backlash">backlash</span><small data-i18n="sub_backlash">lost motion, worst crank angle</small></span><span class="v" id="m-backlash"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_backlash">backlash</span><small data-i18n="sub_backlash">zero-error ideal, mesh only</small></span><span class="v" id="m-backlash"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_asbuilt">as-built backlash</span><small data-i18n="sub_asbuilt">Monte-Carlo over your plan · typical–95%</small></span><span class="v" id="m-asbuilt"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_syslm">system lost motion</span><small data-i18n="sub_syslm">mesh + bearing + output coupling</small></span><span class="v" id="m-syslm"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_stiff">stiffness</span><small data-i18n="sub_stiff">torsional, worst crank angle</small></span><span class="v" id="m-stiff"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_stress">contact stress</span><small data-i18n="sub_stress">peak Hertz pressure, loaded pin</small></span><span class="v" id="m-stress"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_safety">safety factor</span><small data-i18n="sub_safety">vs 1500 MPa contact-fatigue limit</small></span><span class="v" id="m-safety"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_ripple">ripple</span><small data-i18n="sub_ripple">wind-up variation = smoothness</small></span><span class="v" id="m-ripple"></span></div>
-        <div class="metric"><span class="k"><span data-i18n="m_margin">tolerance margin</span><small data-i18n="sub_margin">free play left under the stack</small></span><span class="v" id="m-margin"></span></div>
-        <div class="metric"><span class="k"><span data-i18n="m_rmargin">robust margin</span><small data-i18n="sub_rmargin">margin at worst machining error</small></span><span class="v" id="m-rmargin"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_rmargin">worst-case margin</span><small data-i18n="sub_rmargin">every error at its tightest — &gt;0 still assembles</small></span><span class="v" id="m-rmargin"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_teeth">loaded teeth</span><small data-i18n="sub_teeth">sharing the rated torque</small></span><span class="v" id="m-teeth"></span></div>
       </div>
     </div>
@@ -350,7 +405,12 @@
 "use strict";
 // ============================ geometry (editable) ============================
 let Rb=34.0, Rr=2.5, E=1.5, N=18, M=N+1, Np=N+1;
-let TOL=0.015, MACH=0.005, T_RATED=30.0;
+let T_RATED=30.0;
+// manufacturing-error sources, half-band [µm] each — set by the process pickers, editable.
+// prof = flank form error, pin = pin diameter, hole = pin-hole true position, ecc = eccentricity.
+let ERR={prof:4, pin:2, hole:4, ecc:3};
+let SENS_E=1.5;   // worst |∂gap/∂E| over pins+cranks — finite-differenced by mcYield(), not assumed
+const dwc=()=>(ERR.prof+ERR.pin+ERR.hole+SENS_E*ERR.ecc)/1000;  // worst-case gap tightening [mm]
 let L_TOOTH=10.0, C_BEAR=0.0, C_OUT=0.0;   // disk thickness [mm]; input-bearing & output-coupling radial clearance [mm] (opt-in)
 const K_CONTACT=5.0e4;
 const ESTAR=115385.0, SH_LIM=1500.0;   // steel-steel Hertz E* [MPa] (1/E*=2(1-0.3²)/210000); contact-fatigue limit [MPa]
@@ -441,23 +501,67 @@ function windup(gaps,arms){
 function evaluate(offset,coeffs,nPts,variant){
   nPts=nPts||8000;   // match Python NTH so the nearest-point search agrees to the displayed digit
   const prof=profile(offset,coeffs,nPts,variant), arcmin=180/Math.PI*60;
-  const plays=[],margins=[],rmargins=[],ks=[],bs=[],nes=[]; let sigMax=0;
+  const DW=dwc(), TS=[ERR.prof/1e3, ERR.pin/1e3, ERR.hole/1e3, SENS_E*ERR.ecc/1e3];
+  const plays=[],rmargins=[],blmaxs=[],ks=[],bs=[],nes=[], bud=[0,0,0,0]; let sigMax=0;
   for(let i=0;i<48;i++){   // 48 crank samples over one mesh cycle to resolve the TE ripple
     const psi=2*Math.PI/N*i/48, ms=meshState(prof,psi);
     const [lo,hi]=playRange(ms.gaps,ms.arms); plays.push(hi-lo);
-    const [tlo,thi]=playRange(ms.gaps,ms.arms,TOL); margins.push(thi-tlo);
-    // worst-case machining error +e tightens every gap by e, i.e. an extra e on the tolerance stack
-    const [rlo,rhi]=playRange(ms.gaps,ms.arms,TOL+MACH); rmargins.push(rhi-rlo);
+    // ± error band: the tight side (all sources removing clearance) is the jam check, the loose
+    // side (all sources adding clearance) bounds the as-built backlash.
+    const [tlo,thi]=playRange(ms.gaps,ms.arms,DW); rmargins.push(thi-tlo);
+    const [llo,lhi]=playRange(ms.gaps,ms.arms,-DW); blmaxs.push(lhi-llo);
+    for(let s=0;s<4;s++){ const pr=playRange(ms.gaps,ms.arms,-TS[s]), wd=pr[1]-pr[0]; if(wd>bud[s])bud[s]=wd; }
     const w=windup(ms.gaps,ms.arms); ks.push(w.k); bs.push(w.b); nes.push(w.ne);
     const s=hertzMaxMPa(w.F,ms.invre); if(s>sigMax)sigMax=s;   // durability: stress on the loaded contacts
   }
   // system lost motion = mesh backlash + input-bearing + output-coupling clearance, each a first-order
   // output-referred angular deadband (ponytail: lumped, lever arm ≈ pin-circle / output-pin-circle radius).
+  const backlash=Math.max(...plays)*arcmin;
   const sysLM=(Math.max(...plays) + C_BEAR/Rb + C_OUT/(0.6*Rb))*arcmin;
-  return { backlash:Math.max(...plays)*arcmin, stiff:Math.min(...ks)/1e3/arcmin,
-           ripple:(Math.max(...bs)-Math.min(...bs))*1e6, margin:Math.min(...margins)*arcmin,
+  return { backlash, blmax:Math.max(...blmaxs)*arcmin,
+           budget:bud.map(v=>Math.max(0,v*arcmin-backlash)),   // each source's worst-case backlash adder [′]
+           stiff:Math.min(...ks)/1e3/arcmin,
+           ripple:(Math.max(...bs)-Math.min(...bs))*1e6,
            rmargin:Math.min(...rmargins)*arcmin, n_eng:Math.min(...nes),
            sigmaH:sigMax, safety:(sigMax>1e-9?SH_LIM/sigMax:Infinity), sysLM };
+}
+// Monte-Carlo as-built prediction: sample every manufacturing-error source over its ± band, rebuild
+// the gap field, and read off the backlash distribution + jam risk of the units you'd actually make.
+// Eccentricity error = the disk was CUT for the nominal E but the shaft throw came out E±e, so only
+// the mesh position is perturbed (profile fixed) — finite-differenced per pin per crank angle.
+// Also refreshes the global SENS_E for the worst-case math.
+// ponytail: pin diameter is common-mode (one batch); hole position and flank error are independent
+// per pin, hole error taken fully along the contact normal (worst orientation, mildly conservative).
+function mcYield(offset,coeffs,nSamp){
+  if(offset===undefined){ offset=state.offset; coeffs=state.coeffs; }
+  nSamp=nSamp||400;
+  const nc=12, nPts=2000, h=0.002, arcmin=180/Math.PI*60, E0=E;
+  const base=[], gp=[], gm=[], sens=[]; let sMax=0;
+  const p0=profile(offset,coeffs,nPts);
+  try{
+    for(let c=0;c<nc;c++) base.push(meshState(p0,2*Math.PI/N*c/nc));
+    E=E0+h; for(let c=0;c<nc;c++) gp.push(meshState(p0,2*Math.PI/N*c/nc).gaps);
+    E=E0-h; for(let c=0;c<nc;c++) gm.push(meshState(p0,2*Math.PI/N*c/nc).gaps);
+  } finally { E=E0; }
+  for(let c=0;c<nc;c++) sens.push(base[c].gaps.map((g,j)=>{
+    const s=(gp[c][j]-gm[c][j])/(2*h); if(Math.abs(s)>sMax)sMax=Math.abs(s); return s; }));
+  SENS_E=Math.min(5,Math.max(0.2,sMax));   // clamp against finite-diff noise; typically ~1–2
+  const ep=ERR.prof/1e3, en=ERR.pin/1e3, eh=ERR.hole/1e3, ee=ERR.ecc/1e3;
+  const bl=[]; let nj=0;
+  for(let s=0;s<nSamp;s++){
+    const dpin=(2*Math.random()-1)*en, dE=(2*Math.random()-1)*ee;
+    const uh=[]; for(let j=0;j<Np;j++) uh.push((2*Math.random()-1)*eh);
+    let wide=0, tight=Infinity;
+    for(let c=0;c<nc;c++){
+      const g0=base[c].gaps, sc=sens[c], g2=new Array(g0.length);
+      for(let j=0;j<g0.length;j++) g2[j]=g0[j]-dpin+uh[j]+(2*Math.random()-1)*ep+sc[j]*dE;
+      const pr=playRange(g2,base[c].arms), wd=pr[1]-pr[0];
+      if(wd>wide)wide=wd; if(wd<tight)tight=wd;
+    }
+    bl.push(wide*arcmin); if(!(tight>0)) nj++;
+  }
+  bl.sort((a,b)=>a-b);
+  return { p50:bl[Math.floor(nSamp*0.5)], p95:bl[Math.floor(nSamp*0.95)], jam:nj/nSamp };
 }
 // pick rotation sign by conjugacy of the unmodified tooth (mirrors Python self-check);
 // also reports worst residual clearance so we can flag an invalid (undercut) geometry.
@@ -477,16 +581,43 @@ const TXT = {
   eyebrow:      { en:'Cycloidal drive · profile designer', zh:'摆线针轮 · 齿廓设计器' },
   title_main:   { en:'Cycloidal Shape Designer', zh:'摆线齿廓设计器' },
   title_thin:   { en:'— tune it, mesh it, export to SolidWorks', zh:'— 调形、啮合、导出 SolidWorks' },
-  lede:         { en:"Set your drive's geometry, shape the tooth with an offset plus four harmonic terms, and read backlash, stiffness and margins live. When you change anything, re-run the built-in optimizer to find the new optimum.",
-                  zh:'输入减速器几何参数，用等距偏置加四阶谐波修型项塑造齿廓，实时读取背隙、刚度与余量。改了任何参数后，重跑内置优化器即可找到新的最优修型。' },
+  lede:         { en:"Set your geometry, pick how each part will be made, and the tool converts your shop's real accuracy into the backlash of the units you'd actually build. Then one click finds the tooth modification that still meets your target despite those errors.",
+                  zh:'输入几何参数,选好每个零件怎么加工——工具把你车间的真实精度换算成做出来的装机背隙。再一键搜出在这些误差下仍能达标的最优修型。' },
   setup_h:      { en:'Geometry & spec', zh:'几何参数与工况' },
   lbl_Rb:       { en:'pin-circle Rb', zh:'针齿中心圆 Rb' },
   lbl_Rr:       { en:'pin radius Rr', zh:'针齿半径 Rr' },
   lbl_E:        { en:'eccentricity E', zh:'偏心距 E' },
   lbl_N:        { en:'lobes N', zh:'齿数 N' },
-  lbl_tol:      { en:'tolerance', zh:'公差叠加' },
-  lbl_mach:     { en:'mach. error ±', zh:'加工误差 ±' },
   lbl_T:        { en:'rated torque', zh:'额定扭矩' },
+  mfg_h:        { en:'Manufacturing plan — pick how each part is made; the ±µm numbers are editable if you know your shop better',
+                  zh:'加工方案 —— 选每个零件怎么做,工具替你算公差;更了解你的车间就直接改 ±µm 数值' },
+  lbl_prof:     { en:'disk profile', zh:'摆线盘齿廓' },
+  lbl_pin:      { en:'pins', zh:'针齿销' },
+  lbl_hole:     { en:'pin holes', zh:'针齿孔位' },
+  lbl_ecc:      { en:'eccentric E', zh:'偏心距 E' },
+  pr_grind:     { en:'profile ground', zh:'磨齿' },
+  pr_wslow:     { en:'wire EDM · slow', zh:'慢走丝' },
+  pr_wfast:     { en:'wire EDM · fast', zh:'快走丝' },
+  pr_mill:      { en:'CNC milled', zh:'CNC 铣' },
+  pr_print:     { en:'3D printed', zh:'3D 打印' },
+  pr_custom:    { en:'custom', zh:'自定义' },
+  pn_ground:    { en:'ground / needle rollers', zh:'研磨销 / 滚针' },
+  pn_std:       { en:'dowel pins h7', zh:'标准圆柱销 h7' },
+  pn_turn:      { en:'turned', zh:'车削' },
+  ho_jig:       { en:'jig-bored / ground', zh:'坐标镗 / 磨' },
+  ho_wslow:     { en:'wire EDM · slow', zh:'慢走丝' },
+  ho_wfast:     { en:'wire EDM · fast', zh:'快走丝' },
+  ho_ream:      { en:'reamed', zh:'铰孔' },
+  ho_drill:     { en:'drilled', zh:'钻孔' },
+  ec_grind:     { en:'ground', zh:'磨削' },
+  ec_turn:      { en:'turned', zh:'车削' },
+  src_prof:     { en:'profile', zh:'齿廓' },
+  src_pin:      { en:'pins', zh:'针销' },
+  src_hole:     { en:'holes', zh:'销孔' },
+  src_ecc:      { en:'eccentric', zh:'偏心' },
+  bud_lead:     { en:'worst-case build: total error ±{d} µm → backlash up to {b}′ · who contributes what:',
+                  zh:'最坏情况:总误差 ±{d} µm → 装机背隙最高 {b}′ · 各来源贡献:' },
+  bud_hint:     { en:'· tighten {s} first', zh:'· 先收紧:{s}' },
   lbl_thick:    { en:'disk width', zh:'摆线盘厚度' },
   lbl_cbear:    { en:'bearing clr.', zh:'轴承游隙' },
   lbl_cout:     { en:'output clr.', zh:'输出机构间隙' },
@@ -494,7 +625,7 @@ const TXT = {
                   zh:'几何根切 —— 未修型齿廓无法与全部针齿共轭啮合。请减小 E 或增大 Rb。' },
   mesh_h:       { en:'Mesh', zh:'啮合' },
   mesh_aux:     { en:'ratio {R}:1 · output frame', zh:'减速比 {R}:1 · 输出坐标系' },
-  jam:          { en:'Tolerance jam — locks under the tolerance stack', zh:'公差卡死 —— 在公差叠加下摆线盘锁死' },
+  jam:          { en:'Worst-case jam — locks if every manufacturing error lands at its tightest', zh:'最坏卡死 —— 所有加工误差同时取最坏时摆线盘锁死' },
   play_pause:   { en:'❚❚ pause', zh:'❚❚ 暂停' },
   play_play:    { en:'▶ play', zh:'▶ 播放' },
   speed:        { en:'speed', zh:'速度' },
@@ -512,7 +643,10 @@ const TXT = {
   desc_c3:      { en:'flank fine shape', zh:'齿面细部' },
   desc_c4:      { en:'flank fine shape', zh:'齿面细部' },
   m_backlash:   { en:'backlash', zh:'背隙' },
-  sub_backlash: { en:'mesh only, worst crank angle', zh:'仅啮合，最差曲柄角' },
+  sub_backlash: { en:'zero-error ideal, mesh only', zh:'零误差理想值,仅啮合' },
+  m_asbuilt:    { en:'as-built backlash', zh:'装机背隙(预测)' },
+  sub_asbuilt:  { en:'Monte-Carlo over your plan · typical–95%', zh:'按加工方案抽样 400 台 · 典型–95%分位' },
+  mc_jam:       { en:'% jam', zh:'% 卡死' },
   m_syslm:      { en:'system lost motion', zh:'系统空回' },
   sub_syslm:    { en:'mesh + bearing + output coupling', zh:'啮合 + 轴承 + 输出机构' },
   m_stiff:      { en:'stiffness', zh:'刚度' },
@@ -524,10 +658,8 @@ const TXT = {
   overload:     { en:'· overstressed', zh:'· 超载' },
   m_ripple:     { en:'ripple', zh:'波动' },
   sub_ripple:   { en:'wind-up variation = smoothness', zh:'加载转角波动 = 丝滑度' },
-  m_margin:     { en:'tolerance margin', zh:'公差余量' },
-  sub_margin:   { en:'free play left under the stack', zh:'公差叠加下剩余游隙' },
-  m_rmargin:    { en:'robust margin', zh:'鲁棒余量' },
-  sub_rmargin:  { en:'margin at worst machining error', zh:'最不利加工误差下的余量' },
+  m_rmargin:    { en:'worst-case margin', zh:'最坏余量' },
+  sub_rmargin:  { en:'every error at its tightest — >0 still assembles', zh:'全部误差取最紧 — >0 仍可装配' },
   m_teeth:      { en:'loaded teeth', zh:'受载齿数' },
   sub_teeth:    { en:'sharing the rated torque', zh:'分担额定扭矩' },
   tooth_h:      { en:'Tooth flank', zh:'齿面' },
@@ -539,7 +671,7 @@ const TXT = {
   lg_shipped:   { en:'shipped design', zh:'当前出图设计' },
   lg_uniform:   { en:'uniform', zh:'等距' },
   lg_yours:     { en:'your design', zh:'你的设计' },
-  lg_tol:       { en:'tolerance budget', zh:'公差预算' },
+  lg_tol:       { en:'worst-case error', zh:'最坏总误差' },
   export_h:     { en:'Export to SolidWorks', zh:'导出到 SolidWorks' },
   export_sub:   { en:'equation-driven curve · numbers baked in · units mm', zh:'方程驱动曲线 · 数值已内联 · 单位 mm' },
   btn_copyx:    { en:'Copy X(t)', zh:'复制 X(t)' },
@@ -551,20 +683,20 @@ const TXT = {
   jamword:      { en:'· jam', zh:'· 卡死' },
   riskword:     { en:'· jam risk', zh:'· 卡死风险' },
   opt_h:        { en:'Optimize for this geometry', zh:'为当前几何搜索最优' },
-  opt_sub:      { en:'one click → the optimal robust curve loaded into the sliders, meeting your target backlash if the tolerances allow', zh:'一键 → 最优抗误差曲线直接载入滑块;公差允许时即达到你的目标背隙' },
+  opt_sub:      { en:'one click → the optimal curve loaded into the sliders, judged on the backlash of the units you\'d actually build', zh:'一键 → 最优曲线直接载入滑块;达标与否按"做出来的装机背隙"判定' },
   opt_target:   { en:'target backlash', zh:'目标背隙' },
   opt_run:      { en:'◆ Get the optimal curve', zh:'◆ 一键生成最优曲线' },
   opt_running:  { en:'searching…', zh:'搜索中…' },
-  opt_hit:      { en:'✓ backlash {b}′ · robust to ±{e} µm machining error · loaded — SolidWorks equation ready below',
-                  zh:'✓ 背隙 {b}′ · 可抗 ±{e} µm 加工误差 · 已载入 —— 下方 SolidWorks 方程已就绪' },
-  opt_miss:     { en:'⚠ lowest robust backlash is {b}′ — can\'t reach {g}′ at these tolerances. You\'d need tolerance + machining ≈ {need} µm (now {now} µm). Loaded the closest.',
-                  zh:'⚠ 当前公差下最低鲁棒背隙 {b}′,达不到 {g}′。估计需把 公差+加工误差 收到约 {need} µm(现 {now} µm)。已载入最接近的。' },
+  opt_hit_wc:   { en:'✓ guaranteed ≤ {b}′ even with every manufacturing error at its worst — meets your {g}′ target · loaded, SolidWorks equation ready below',
+                  zh:'✓ 即使所有加工误差同时取最坏,装机背隙也 ≤ {b}′,达标({g}′)· 已载入,下方 SolidWorks 方程就绪' },
+  opt_hit_p95:  { en:'✓ 95% of built units ≤ {p}′ — meets your {g}′ target (worst case {b}′) · loaded, SolidWorks equation ready below',
+                  zh:'✓ 按你的加工方案,95% 的件装机背隙 ≤ {p}′,达标({g}′;最坏 {b}′)· 已载入,下方方程就绪' },
+  opt_miss:     { en:'⚠ best design still gives {p}′ at the 95th percentile — {g}′ is out of reach with this plan. Shrink total error from ±{now} to ≈ ±{need} µm; the biggest lever is {src}. Loaded the closest.',
+                  zh:'⚠ 按当前加工方案,最优设计做出来 95% 分位也要 {p}′,到不了 {g}′。需把总误差从 ±{now} µm 收到约 ±{need} µm——最大的改进点是{src}。已载入最接近的。' },
   opt_hint:     { en:'Set your geometry above, then search. Click a point to load it into the sliders.',
                   zh:'先在上方设好几何, 再搜索。点击散点即可载入到滑块。' },
-  opt_stale:    { en:'⟳ geometry changed — re-run to update the front', zh:'⟳ 几何已改 — 重新搜索以更新前沿' },
-  opt_done:     { en:'{n} designs · lowest backlash {b}′ at this tolerance · click one to load',
-                  zh:'{n} 个设计 · 当前公差下最低背隙 {b}′ · 点击载入' },
-  opt_none:     { en:'no feasible design in range — loosen tolerance or geometry', zh:'范围内无可行解 — 放宽公差或几何' },
+  opt_stale:    { en:'⟳ inputs changed — re-run to update the front', zh:'⟳ 参数已改 — 重新搜索以更新前沿' },
+  opt_none:     { en:'no feasible design in range — loosen the manufacturing plan or geometry', zh:'范围内无可行解 — 放宽加工方案或几何' },
   opt_lg:       { en:'non-dominated designs (backlash ↔ stiffness, colour = pressure angle)',
                   zh:'非支配设计 (背隙 ↔ 刚度, 颜色 = 压力角)' },
   opt_load:     { en:'load into sliders →', zh:'载入滑块 →' },
@@ -574,11 +706,11 @@ const TXT = {
   c_root:       { en:'root', zh:'齿根' },
   c_mid:        { en:'mid-flank', zh:'齿腰' },
   c_clr:        { en:'clearance µm', zh:'间隙 µm' },
-  c_stack:      { en:'tolerance stack', zh:'公差叠加' },
+  c_stack:      { en:'worst-case error', zh:'最坏总误差' },
   footer_read:  { en:"Reading it: tight at the mid-flank (where the arm is longest) carries load with little lost motion — that buys stiffness and low backlash. Relieved at tip and root leaves room for the tolerance stack and softens entry/exit shock. That reverse-bow, sitting right at the tolerance edge, is what the GA optimum finds.",
                   zh:'看图：齿腰（力臂最长处）最紧 —— 用极小的空回承载，换来高刚度、低背隙；齿顶与齿根放松 —— 给公差叠加留余量、缓和入啮/出啮冲击。这条贴着公差边界的"反弓"曲线，正是 GA 最优解。' },
-  footer_note:  { en:'Model: quasi-static, rigid disk, linearised load-sharing (K=50 N/µm per tooth). System lost motion adds the input-bearing and output-coupling clearances as first-order lumped deadbands; contact stress is a Hertz line-contact post-process on the computed forces (steel, 1500 MPa fatigue limit). Trends are faithful; absolute values are order-of-magnitude. No lubricant film / dynamics.',
-                  zh:'模型：准静态、刚性盘、线性化载荷分配（K=50 N/µm 每齿）。系统空回把输入轴承与输出机构间隙作为一阶集总死区叠加；接触应力是对已求解接触力做的赫兹线接触后处理（钢，1500 MPa 疲劳极限）。趋势可靠，绝对值为量级估计。未含油膜与动力学。' },
+  footer_note:  { en:'Model: quasi-static, rigid disk, linearised load-sharing (K=50 N/µm per tooth). As-built backlash is a 400-sample Monte-Carlo over the per-part manufacturing errors (pin batch common-mode; holes and flank independent per pin; eccentricity via finite-difference gap sensitivity); worst-case numbers put every error at its extreme simultaneously. System lost motion adds bearing/output clearances as lumped deadbands; contact stress is a Hertz line-contact post-process (steel, 1500 MPa fatigue limit). Trends are faithful; absolute values are order-of-magnitude. No lubricant film / dynamics.',
+                  zh:'模型：准静态、刚性盘、线性化载荷分配（K=50 N/µm 每齿）。装机背隙为对各加工误差源做 400 次蒙特卡洛抽样（针销同批共模;销孔与齿面逐针独立;偏心距经有限差分间隙灵敏度折算）;"最坏"类指标为全部误差同时取极值。系统空回把轴承与输出机构间隙作为集总死区叠加；接触应力是赫兹线接触后处理（钢，1500 MPa 疲劳极限）。趋势可靠，绝对值为量级估计。未含油膜与动力学。' },
 };
 const NK = 4;   // number of harmonics in the modification δ(θ)=offset+Σ_{k=1}^{NK} c_k·cos(kNθ)
 const state = { offset:-0.0209, coeffs:[-0.0012,-0.0037,0,0], psi:0, playing:true, speed:0.45, exag:40, lang:'en' };
@@ -683,7 +815,7 @@ function drawClearance(){
     ['uniform', ()=>clearanceCurve(-0.040,[0,0,0,0],'harmonic'),             COL.orange, 1.5],
     ['yours',   ()=>clearanceCurve(state.offset,state.coeffs,'harmonic'),    COL.green, 2.4],
   ].map(([n,f,c,wd])=>({n,c,wd,data:f()}));
-  let ymin=10, ymax=Math.max(20, TOL*1e3+5);
+  let ymin=10, ymax=Math.max(20, dwc()*1e3+5);
   for(const s of series) for(const d of s.data){ ymin=Math.min(ymin,d[1]); ymax=Math.max(ymax,d[1]); }
   ymin=Math.floor((ymin-2)/5)*5; ymax=Math.ceil((ymax+2)/5)*5;
   const mapx=u=>padL+u*(w-padL-padR), mapy=v=>padT+(ymax-v)/(ymax-ymin)*(h-padT-padB);
@@ -692,9 +824,10 @@ function drawClearance(){
     ctx.strokeStyle=COL.line; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(padL,mapy(v)); ctx.lineTo(w-padR,mapy(v)); ctx.stroke();
     ctx.fillStyle=COL['ink-3']; ctx.fillText(v, padL-6, mapy(v));
   }
+  const DWU=dwc()*1e3;
   ctx.strokeStyle=COL.danger; ctx.lineWidth=1.3; ctx.setLineDash([5,4]);
-  ctx.beginPath(); ctx.moveTo(padL,mapy(TOL*1e3)); ctx.lineTo(w-padR,mapy(TOL*1e3)); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle=COL.danger; ctx.textAlign='left'; ctx.fillText(`±${(TOL*1e3).toFixed(0)} µm ${t('c_stack')}`, padL+4, mapy(TOL*1e3)-8);
+  ctx.beginPath(); ctx.moveTo(padL,mapy(DWU)); ctx.lineTo(w-padR,mapy(DWU)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle=COL.danger; ctx.textAlign='left'; ctx.fillText(`±${DWU.toFixed(0)} µm ${t('c_stack')}`, padL+4, mapy(DWU)-8);
   ctx.fillStyle=COL['ink-3']; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
   ctx.fillText(t('c_tip'), mapx(0), h-9); ctx.fillText(t('c_mid'), mapx(0.25), h-9);
   ctx.fillText(t('c_root'), mapx(0.5), h-9); ctx.fillText(t('c_mid'), mapx(0.75), h-9); ctx.fillText(t('c_tip'), mapx(0.98), h-9);
@@ -715,9 +848,13 @@ function deltaTag(now, base, better){
   return `<span class="delta ${good?'up':'down'}">${d>0?'▲':'▼'}${Math.abs(d).toFixed(better==='ripple'?0:1)}</span>`;
 }
 function updateMetrics(){
+  const mc=mcYield();   // first: also refreshes SENS_E so the worst-case numbers below use it
   const r=evaluate(state.offset,state.coeffs);
   const set=(id,html,cls)=>{ const el=I(id); el.innerHTML=html; el.className='v'+(cls?' '+cls:''); };
   set('m-backlash', `${fmt(r.backlash)}<u>′</u> ${deltaTag(r.backlash,BASE&&BASE.backlash,'low')}`);
+  const jstate = mc.jam>0.05?'bad':(mc.jam>0?'warn':'');
+  const jcue = mc.jam>0? ` <u>${(mc.jam*100).toFixed(0)}${t('mc_jam')}</u>`:'';
+  set('m-asbuilt',  mc.jam>=0.5? `—${jcue}` : `${fmt(mc.p50,1)}–${fmt(mc.p95,1)}<u>′</u>${jcue}`, jstate);
   set('m-syslm',    `${fmt(r.sysLM)}<u>′</u>`);
   set('m-stiff',    `${fmt(r.stiff,1)}<u>N·m/′</u> ${deltaTag(r.stiff,BASE&&BASE.stiff,'high')}`);
   set('m-stress',   `${fmt(r.sigmaH,0)}<u>MPa</u>`);
@@ -725,14 +862,20 @@ function updateMetrics(){
   const sfcue = sfstate==='bad'?` <u>${t('overload')}</u>` : sfstate==='warn'?` <u>${t('tight')}</u>` : '';
   set('m-safety',   `${fmt(r.safety,2)}<u>×</u>${sfcue}`, sfstate);
   set('m-ripple',   `${fmt(r.ripple,1)}<u>µrad</u> ${deltaTag(r.ripple,BASE&&BASE.ripple,'ripple')}`);
-  const mstate = r.margin<=0?'bad':(r.margin<0.5?'warn':'');
-  const mcue = mstate==='bad'?` <u>${t('jamword')}</u>` : mstate==='warn'?` <u>${t('tight')}</u>` : '';
-  set('m-margin',   `${fmt(r.margin)}<u>′</u>${mcue}`, mstate);
   const rstate = r.rmargin<=0?'bad':(r.rmargin<0.5?'warn':'');
-  const rcue = rstate==='bad'?` <u>${t('riskword')}</u>` : rstate==='warn'?` <u>${t('tight')}</u>` : '';
-  set('m-rmargin',  `${fmt(r.rmargin)}<u>′</u>${rcue}`, rstate);
+  const rcue = rstate==='bad'?` <u>${t('jamword')}</u>` : rstate==='warn'?` <u>${t('tight')}</u>` : '';
+  set('m-rmargin',  `${fmt(Math.max(r.rmargin,-99))}<u>′</u>${rcue}`, rstate);   // deep interference: the cue matters, not the number
   set('m-teeth',    `${r.n_eng}<u>/ ${Np}</u>`);
-  I('jam').classList.toggle('on', r.margin<=0);
+  I('jam').classList.toggle('on', r.rmargin<=0);
+  // error budget: each source's worst-case backlash adder, biggest first → tells you what to tighten
+  const names=[t('src_prof'),t('src_pin'),t('src_hole'),t('src_ecc')];
+  const vals=[ERR.prof,ERR.pin,ERR.hole,ERR.ecc];
+  const order=[0,1,2,3].sort((a,b)=>r.budget[b]-r.budget[a]);
+  const bmax=Math.max(0.01,...r.budget);
+  I('budget').innerHTML =
+    `<b>${t('bud_lead').replace('{d}',(dwc()*1e3).toFixed(0)).replace('{b}',r.blmax.toFixed(1))}</b><br>`+
+    order.map(i=>`<span class="src"><i class="bar" style="width:${Math.max(3,42*r.budget[i]/bmax)|0}px"></i>${names[i]} ±${vals[i]}µm → +${r.budget[i].toFixed(1)}′</span>`).join('')+
+    ` <span class="hint">${t('bud_hint').replace('{s}',names[order[0]])}</span>`;
 }
 
 // ============================ SolidWorks export ============================
@@ -775,7 +918,11 @@ function applyLang(lang){
   I('lang-zh').classList.toggle('on', lang==='zh');
   updateMetrics();
   drawTooth(); drawClearance();
-  if(typeof OPT!=='undefined'){ if(!OPT.ran) I('opt-stat').textContent=t('opt_hint'); drawOptPlot(); if(OPT.sel>=0) showPick(); }
+  if(typeof OPT!=='undefined'){
+    if(!OPT.ran) I('opt-stat').textContent=t('opt_hint');
+    else if(OPT.front.length && !OPT.running) applyGoalPick(false);   // re-render the verdict in the new language
+    drawOptPlot(); if(OPT.sel>=0) showPick();
+  }
 }
 
 // ============================ geometry / interaction ============================
@@ -785,10 +932,8 @@ function applyGeometry(){
   Rr=clampNum(+I('g-Rr').value||2.5, 0.5, 12);
   E =clampNum(+I('g-E').value||1.5, 0.2, 6);
   N =Math.round(clampNum(+I('g-N').value||18, 6, 40)); M=N+1; Np=N+1;
-  TOL=clampNum(+I('g-tol').value||15, 1, 80)/1000;
-  MACH=clampNum(+I('g-mach').value||0, 0, 20)/1000;
   T_RATED=clampNum(+I('g-T').value||30, 1, 500);
-  readSpec();
+  readSpec(); readErr();
   rebuildPins();
   ROT_SIGN=pickRotSign();
   I('warn').classList.toggle('on', GEOM_WORST>0.003);
@@ -802,6 +947,13 @@ function readSpec(){   // durability / lost-motion spec — affects metrics only
   C_BEAR =clampNum(+I('g-cbear').value||0, 0, 100)/1000;
   C_OUT  =clampNum(+I('g-cout').value||0, 0, 100)/1000;
 }
+function readErr(){   // manufacturing plan → per-source half-bands [µm]
+  ERR.prof=clampNum(+I('e-prof').value||0, 0, 100);
+  ERR.pin =clampNum(+I('e-pin').value||0, 0, 100);
+  ERR.hole=clampNum(+I('e-hole').value||0, 0, 100);
+  ERR.ecc =clampNum(+I('e-ecc').value||0, 0, 100);
+}
+function errChanged(){ readErr(); invalidateOpt(); drawClearance(); scheduleMetrics(); }
 function syncSliders(){
   I('s-offset').value=state.offset*1e3; I('v-offset').textContent=(state.offset*1e3).toFixed(1)+' µm';
   for(let k=1;k<=NK;k++){ I('s-c'+k).value=(state.coeffs[k-1]||0)*1e3; I('v-c'+k).textContent=((state.coeffs[k-1]||0)*1e3).toFixed(1)+' µm'; }
@@ -820,8 +972,13 @@ document.querySelectorAll('.presets button').forEach(b=>b.addEventListener('clic
 }));
 I('s-offset').addEventListener('input',e=>{ state.offset=clampNum(+e.target.value/1e3,-0.1,-0.015); afterChange(); });
 for(let k=1;k<=NK;k++){ I('s-c'+k).addEventListener('input',e=>{ state.coeffs[k-1]=+e.target.value/1e3; afterChange(); }); }
-['g-Rb','g-Rr','g-E','g-N','g-tol','g-mach','g-T'].forEach(id=>I(id).addEventListener('input',applyGeometry));
+['g-Rb','g-Rr','g-E','g-N','g-T'].forEach(id=>I(id).addEventListener('input',applyGeometry));
 ['g-thick','g-cbear','g-cout'].forEach(id=>I(id).addEventListener('input',()=>{ readSpec(); scheduleMetrics(); }));
+// process picker fills the µm field; editing the field flips the picker to "custom"
+[['p-prof','e-prof'],['p-pin','e-pin'],['p-hole','e-hole'],['p-ecc','e-ecc']].forEach(([ps,es])=>{
+  I(ps).addEventListener('change',()=>{ const v=I(ps).value; if(v!=='c') I(es).value=v; errChanged(); });
+  I(es).addEventListener('input',()=>{ I(ps).value='c'; errChanged(); });
+});
 
 I('play').addEventListener('click',()=>{ state.playing=!state.playing; I('play').textContent=playLabel(); I('play').setAttribute('aria-pressed',state.playing); });
 I('speed').addEventListener('input',e=>{ state.speed=+e.target.value/100; });
@@ -834,20 +991,13 @@ I('lang-zh').addEventListener('click',()=>applyLang('zh'));
 
 // ============================ in-browser optimizer: NSGA-II in a Web Worker ============================
 const OPT = { front:[], sel:-1, running:false, ran:false, pts:[], worker:null };
-function kneeIndex(F){
-  // knee = closest to the ideal (low backlash, high stiffness) corner. Only these two drive the
-  // highlight (they're the usual priorities); ripple / pressure angle are still shown + colour-coded.
-  const col=k=>F.map(d=>d[k]); const nn=(x,lo)=>{const mn=Math.min(...x),mx=Math.max(...x),rg=(mx-mn)||1;return x.map(v=>lo?(v-mn)/rg:(mx-v)/rg);};
-  const nb=nn(col('backlash'),true), nsf=nn(col('stiff'),false);
-  let bi=0,bd=1e9; for(let i=0;i<F.length;i++){const d=nb[i]**2+nsf[i]**2; if(d<bd){bd=d;bi=i;}} return bi;
-}
 function stopWorker(){ if(OPT.worker){ OPT.worker.terminate(); OPT.worker=null; } }
 function invalidateOpt(){ if(!OPT.ran) return; stopWorker(); OPT.running=false; OPT.front=[]; OPT.sel=-1;
   const b=I('opt-run'); b.disabled=false; b.textContent=t('opt_run'); I('opt-stat').textContent=t('opt_stale'); I('opt-pick').innerHTML=''; drawOptPlot(); }
 
 // Worker source: physics (K-harmonic) + a proper NSGA-II. Self-contained (Blob) so it works offline / on Pages.
 const WORKER_SRC = `
-var Rb,Rr,E,N,M,Np,TOL,MACH,T_RATED,K_CONTACT,ROT,PINS,NK;
+var Rb,Rr,E,N,M,Np,DWC,T_RATED,K_CONTACT,ROT,PINS,NK;
 function profile(offset,coeffs,nPts){
   var X=new Float64Array(nPts),Y=new Float64Array(nPts),TH=new Float64Array(nPts);
   for(var i=0;i<nPts;i++){ var th=2*Math.PI*i/nPts;
@@ -889,19 +1039,20 @@ function windup(gaps,arms){ var T=T_RATED*1000, hi=playRange(gaps,arms)[1];
   return {b:b,k:k,ne:ne,F:F}; }
 function evalFast(offset,coeffs){
   var nPts=1800, ns=14, prof=profile(offset,coeffs,nPts), arcmin=180/Math.PI*60;
-  var plays=[],margins=[],rmargins=[],ks=[],bs=[],nes=[], paMax=0, sigMax=0;
+  var plays=[],blmaxs=[],rmargins=[],ks=[],bs=[],nes=[], paMax=0, sigMax=0;
   for(var i=0;i<ns;i++){ var psi=2*Math.PI/N*i/ns, ms=meshState(prof,psi);
     var pr=playRange(ms.gaps,ms.arms); plays.push(pr[1]-pr[0]);
-    var pm=playRange(ms.gaps,ms.arms,TOL); margins.push(pm[1]-pm[0]);
-    var pm2=playRange(ms.gaps,ms.arms,TOL+MACH); rmargins.push(pm2[1]-pm2[0]);
+    var pm2=playRange(ms.gaps,ms.arms,DWC); rmargins.push(pm2[1]-pm2[0]);
+    var pl=playRange(ms.gaps,ms.arms,-DWC); blmaxs.push(pl[1]-pl[0]);
     var w=windup(ms.gaps,ms.arms); ks.push(w.k); bs.push(w.b); nes.push(w.ne);
     var sg=hertzMaxMPa(w.F,ms.invre); if(sg>sigMax)sigMax=sg;
     var fmax=1e-9; for(var j=0;j<Np;j++) if(w.F[j]>fmax)fmax=w.F[j];
     for(var j=0;j<Np;j++){ if(w.F[j]>0.10*fmax){ var px=PINS[j][0],py=PINS[j][1], nx=px-ms.cpx[j], ny=py-ms.cpy[j], nn=Math.hypot(nx,ny);
       if(nn>1e-9){ var phi=Math.atan2(py,px), c=Math.abs((nx/nn)*(-Math.sin(phi))+(ny/nn)*Math.cos(phi)); var a=Math.acos(Math.min(1,Math.max(0,c)))*180/Math.PI; if(a>paMax)paMax=a; } } }
   }
-  return { backlash:Math.max.apply(null,plays)*arcmin, stiff:Math.min.apply(null,ks)/1e3/arcmin,
-           ripple:(Math.max.apply(null,bs)-Math.min.apply(null,bs))*1e6, margin:Math.min.apply(null,margins)*arcmin,
+  return { backlash:Math.max.apply(null,plays)*arcmin, blmax:Math.max.apply(null,blmaxs)*arcmin,
+           stiff:Math.min.apply(null,ks)/1e3/arcmin,
+           ripple:(Math.max.apply(null,bs)-Math.min.apply(null,bs))*1e6,
            rmargin:Math.min.apply(null,rmargins)*arcmin, n_eng:Math.min.apply(null,nes), maxPA:paMax, sigmaH:sigMax };
 }
 var LO=[-0.10,-0.04,-0.04,-0.04,-0.04], HI=[-0.015,0.04,0.04,0.04,0.04], D=5, POP=48, GEN=44, SEEDS=[];
@@ -936,7 +1087,7 @@ function mutate(x){ for(var i=0;i<D;i++) if(Math.random()<0.25) x[i]=clamp(x[i]+
 function frontOut(pop){ var feas=pop.filter(function(p){return p.cv===0;});
   var nd=feas.filter(function(p,i){ for(var j=0;j<feas.length;j++){ if(j!==i && dom(feas[j],p)) return false; } return true; });
   var out=[]; nd.forEach(function(p){ if(!out.some(function(q){return Math.abs(q.backlash-p.backlash)<0.05 && Math.abs(q.stiff-p.stiff)<0.2;}))
-    out.push({offset:p.x[0],coeffs:p.x.slice(1),backlash:p.backlash,stiff:p.stiff,ripple:p.ripple,maxPA:p.maxPA,margin:p.margin,rmargin:p.rmargin,n_eng:p.n_eng,sigmaH:p.sigmaH}); });
+    out.push({offset:p.x[0],coeffs:p.x.slice(1),backlash:p.backlash,blmax:p.blmax,stiff:p.stiff,ripple:p.ripple,maxPA:p.maxPA,rmargin:p.rmargin,n_eng:p.n_eng,sigmaH:p.sigmaH}); });
   return out; }
 function run(){
   var pop=[];  // seed with known-good designs first, then fill with random exploration
@@ -954,7 +1105,7 @@ function run(){
   }
   postMessage({type:'done', pct:100, front:frontOut(pop)});
 }
-onmessage=function(e){ var g=e.data; Rb=g.Rb;Rr=g.Rr;E=g.E;N=g.N;M=g.M;Np=g.Np;TOL=g.TOL;MACH=g.MACH||0;T_RATED=g.T_RATED;K_CONTACT=g.K_CONTACT;ROT=g.ROT;PINS=g.PINS;NK=g.NK;SEEDS=g.SEEDS||[];L_TOOTH=g.L_TOOTH||10;ESTAR=g.ESTAR||115385; run(); };
+onmessage=function(e){ var g=e.data; Rb=g.Rb;Rr=g.Rr;E=g.E;N=g.N;M=g.M;Np=g.Np;DWC=g.DWC||0;T_RATED=g.T_RATED;K_CONTACT=g.K_CONTACT;ROT=g.ROT;PINS=g.PINS;NK=g.NK;SEEDS=g.SEEDS||[];L_TOOTH=g.L_TOOTH||10;ESTAR=g.ESTAR||115385; run(); };
 `;
 
 function runOptimize(){
@@ -979,22 +1130,27 @@ function runOptimize(){
   for(const p of Object.values(PRESETS)) SEEDS.push([p.offset].concat(p.coeffs));
   SEEDS.push([state.offset].concat(state.coeffs.slice(0,NK)));
   for(let off=-0.017; off>=-0.098; off-=0.006){ SEEDS.push([off,-0.0012,-0.0037,0,0]); SEEDS.push([off,0,0,0,0]); }
-  wk.postMessage({ Rb,Rr,E,N,M,Np,TOL,MACH,T_RATED,K_CONTACT,ROT:ROT_SIGN, PINS, NK, SEEDS, L_TOOTH, ESTAR });
+  wk.postMessage({ Rb,Rr,E,N,M,Np,DWC:dwc(),T_RATED,K_CONTACT,ROT:ROT_SIGN, PINS, NK, SEEDS, L_TOOTH, ESTAR });
 }
-// goal-driven: pick the front design that meets the target backlash with the most stiffness (else the
-// lowest-backlash one), report whether the target is reachable at the current tolerance + machining error,
-// and — after a fresh search — load it straight into the sliders / SolidWorks export.
+// goal-driven, judged on the AS-BUILT backlash: tier 1 = worst-case bound meets the target, tier 2 =
+// 95% Monte-Carlo yield meets it, else miss with a self-calibrated "shrink to ±X µm, start with Y"
+// advisory. Picks the stiffest design that guarantees the target (else the lowest worst-case one) and
+// — after a fresh search — loads it straight into the sliders / SolidWorks export.
+// ponytail: the MC runs only on the picked design (front-wide MC would cost ~2 s for little gain).
 function applyGoalPick(autoload){
   if(!OPT.front.length) return;
-  OPT.front.sort((a,b)=>a.backlash-b.backlash);
+  OPT.front.sort((a,b)=>a.blmax-b.blmax);
   const goal=clampNum(+I('opt-goal').value||3, 0.5, 30);
-  const meets=OPT.front.filter(d=>d.backlash<=goal);
+  const meets=OPT.front.filter(d=>d.blmax<=goal);
   OPT.sel = meets.length ? OPT.front.indexOf(meets.reduce((a,b)=>b.stiff>a.stiff?b:a)) : 0;
-  const d=OPT.front[OPT.sel], best=OPT.front[0].backlash;
-  const totNow=(TOL+MACH)*1e3, need=best>1e-9? totNow*goal/best : totNow;   // self-calibrated linear estimate
+  const d=OPT.front[OPT.sel], mcP=mcYield(d.offset,d.coeffs,1200);   // verdict is one-off — buy a stable P95
+  const totNow=dwc()*1e3, need=mcP.p95>1e-9? totNow*goal/mcP.p95 : totNow;   // self-calibrated linear estimate
+  const srcs=[[t('src_prof'),ERR.prof],[t('src_pin'),ERR.pin],[t('src_hole'),ERR.hole],[t('src_ecc'),SENS_E*ERR.ecc]].sort((a,b)=>b[1]-a[1]);
   I('opt-stat').textContent = meets.length
-    ? t('opt_hit').replace('{b}',d.backlash.toFixed(2)).replace('{e}',(MACH*1e3).toFixed(0))
-    : t('opt_miss').replace('{b}',best.toFixed(2)).replace('{g}',goal).replace('{now}',totNow.toFixed(0)).replace('{need}',need.toFixed(0));
+    ? t('opt_hit_wc').replace('{b}',d.blmax.toFixed(2)).replace('{g}',goal)
+    : (mcP.p95<=goal
+        ? t('opt_hit_p95').replace('{p}',mcP.p95.toFixed(2)).replace('{g}',goal).replace('{b}',d.blmax.toFixed(2))
+        : t('opt_miss').replace('{p}',mcP.p95.toFixed(2)).replace('{g}',goal).replace('{now}',totNow.toFixed(0)).replace('{need}',need.toFixed(1)).replace('{src}',srcs[0][0]));
   if(autoload){ state.offset=d.offset; state.coeffs=d.coeffs.slice(); afterChange(); }
   showPick();
 }
@@ -1005,11 +1161,11 @@ function showPick(){
   const row=(k,v)=>`<div class="row"><span class="muted">${k}</span><b>${v}</b></div>`;
   el.innerHTML =
     row(t('m_backlash'), d.backlash.toFixed(2)+"'")+
+    (d.blmax!=null?row(t('m_asbuilt'), '≤ '+d.blmax.toFixed(2)+"'"):'')+
     row(t('m_stiff'), d.stiff.toFixed(1)+' N·m/′')+
     (d.sigmaH!=null?row(t('m_stress'), d.sigmaH.toFixed(0)+' MPa'):'')+
     row(t('m_ripple'), d.ripple.toFixed(1)+' µrad')+
     row(paLbl, d.maxPA.toFixed(1)+'°')+
-    row(t('m_margin'), d.margin.toFixed(2)+"'")+
     row(t('m_rmargin'), (d.rmargin!=null?d.rmargin.toFixed(2):'—')+"'")+
     row(t('m_teeth'), d.n_eng+' / '+Np)+
     `<button class="load" id="opt-load">${t('opt_load')}</button>`;
