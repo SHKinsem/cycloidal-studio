@@ -243,6 +243,7 @@
       <div class="field"><label><span data-i18n="lbl_dt">temp rise ΔT</span> <span class="unit">°C</span></label><input id="g-dt" type="number" value="0" min="-100" max="300" step="5"></div>
       <div class="field"><label><span data-i18n="lbl_cteh">housing CTE</span> <span class="unit">µm/m·K</span></label><input id="g-cteh" type="number" value="23" min="0" max="50" step="0.5"></div>
       <div class="field"><label><span data-i18n="lbl_cted">gear CTE</span> <span class="unit">µm/m·K</span></label><input id="g-cted" type="number" value="11.5" min="0" max="50" step="0.5"></div>
+      <div class="field"><label><span data-i18n="lbl_mu">friction µ</span></label><input id="g-mu" type="number" value="0.06" min="0.01" max="0.2" step="0.01"></div>
     </div>
     <div class="mfg">
       <h3 data-i18n="mfg_h">Manufacturing plan — pick how each part is made; the ±µm numbers are editable if you know your shop better</h3>
@@ -350,6 +351,8 @@
         <div class="metric"><span class="k"><span data-i18n="m_ostress">output-pin stress</span><small data-i18n="sub_ostress">Hertz on output pins · safety</small></span><span class="v" id="m-ostress"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_life">bearing life</span><small data-i18n="sub_life">eccentric-bearing L10 · mesh reaction only</small></span><span class="v" id="m-life"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_thermal">thermal drift</span><small data-i18n="sub_thermal">backlash at ΔT · housing↔gear CTE mismatch</small></span><span class="v" id="m-thermal"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_eff">mesh efficiency</span><small data-i18n="sub_eff">sliding loss · fwd / backdrive · excl. bearings-seals</small></span><span class="v" id="m-eff"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_wear">sliding / wear</span><small data-i18n="sub_wear">peak slip · PV scuffing-wear index</small></span><span class="v" id="m-wear"></span></div>
       </div>
     </div>
 
@@ -430,6 +433,7 @@ let OUT={k:Infinity,bl:0,sigma:0,safety:Infinity,neng:0};   // output-stage resu
 // thermal-drift: only the housing↔disc CTE MISMATCH moves clearance — uniform expansion is a similarity
 // transform (angular backlash invariant). DELTA_T = operating rise [°C]; CTE_H/CTE_D = housing/disc CTE [1/K].
 let DELTA_T=0.0, CTE_H=23.0e-6, CTE_D=11.5e-6;
+let MU_MESH=0.06;   // boundary/EP-grease friction coeff at pin contacts → mesh efficiency + PV wear index (sliding loss only, excl. bearings/seals)
 const K_CONTACT=5.0e4;
 const ESTAR=115385.0, SH_LIM=1500.0;   // steel-steel Hertz E* [MPa] (1/E*=2(1-0.3²)/210000); contact-fatigue limit [MPa]
 let ROT_SIGN=-1.0, GEOM_WORST=0;
@@ -539,7 +543,7 @@ function evaluate(offset,coeffs,nPts,variant){
   nPts=nPts||8000;   // match Python NTH so the nearest-point search agrees to the displayed digit
   const prof=profile(offset,coeffs,nPts,variant), arcmin=180/Math.PI*60;
   const DW=dwc(), TS=[ERR.prof/1e3, ERR.pin/2e3, ERR.hole/1e3, SENS_E*ERR.ecc/1e3];   // pin: Ø-band → radius
-  const plays=[],rmargins=[],blmaxs=[],ks=[],bs=[],nes=[], bud=[0,0,0,0]; let sigMax=0, Psum=0;
+  const plays=[],rmargins=[],blmaxs=[],ks=[],bs=[],nes=[], bud=[0,0,0,0]; let sigMax=0, Psum=0, plossSum=0, vsMax=0, pvMax=0;
   const P_EXP=10/3;   // roller-bearing life exponent (ISO 281)
   for(let i=0;i<48;i++){   // 48 crank samples over one mesh cycle to resolve the TE ripple
     const psi=2*Math.PI/N*i/48, ms=meshState(prof,psi);
@@ -554,6 +558,16 @@ function evaluate(offset,coeffs,nPts,variant){
     // eccentric-bearing radial load = vector sum of the mesh contact forces (mesh-reaction only; dominant term)
     let Rx=0,Ry=0; for(let j=0;j<Np;j++){ Rx+=w.F[j]*ms.cnx[j]; Ry+=w.F[j]*ms.cny[j]; }
     Psum+=Math.pow(Math.hypot(Rx,Ry),P_EXP);
+    // sliding kernel: contact slip v_s = |V_disc·tangent|, V_disc = V_center + ω_disc(=−1/N)×r_c  (per unit ω_in).
+    // Feeds mesh friction loss (efficiency) and the PV = σ·v_s wear/scuffing driver. Speed cancels in η.
+    const Vcx=E*Math.sin(psi), Vcy=-E*Math.cos(psi);
+    for(let j=0;j<Np;j++){ if(w.F[j]<=0) continue;
+      const rcx=ms.cpx[j]-ms.cx, rcy=ms.cpy[j]-ms.cy;
+      const vs=Math.abs((Vcx+rcy/N)*(-ms.cny[j])+(Vcy-rcx/N)*ms.cnx[j]);
+      plossSum+=MU_MESH*w.F[j]*vs;
+      const pv=Math.sqrt((w.F[j]/L_TOOTH)*ESTAR*ms.invre[j]/Math.PI)*vs;
+      if(vs>vsMax)vsMax=vs; if(pv>pvMax)pvMax=pv;
+    }
   }
   // system lost motion = mesh backlash + input-bearing deadband + REAL output pin-hole backlash (OUT.bl),
   // each a first-order output-referred angular deadband (bearing lumped as C_BEAR/Rb).
@@ -563,13 +577,17 @@ function evaluate(offset,coeffs,nPts,variant){
   const stiff=(OUT.k>0&&isFinite(OUT.k))? 1/(1/kmesh+1/OUT.k) : kmesh;   // series: mesh ⊕ output pin-hole (support bearings excluded)
   const Peq=Math.pow(Psum/48,1/P_EXP);   // ISO 281 equivalent dynamic load for the varying cyclic load
   const L10rev=Math.pow(C_BRG/Math.max(Peq,1e-6),P_EXP)*1e6;
+  const Pout=T_RATED*1000/N;                       // output power per unit ω_in [N·mm/rad]
+  const eta=Pout/(Pout+plossSum/48);               // cycle-mean mesh efficiency (mesh sliding only; ω_in cancels)
+  const etaBd=eta>0.5? 2-1/eta : 0;                // standard backdrive relation (η_bd = 2 − 1/η_fwd)
   return { backlash, blmax:Math.max(...blmaxs)*arcmin,
            budget:bud.map(v=>Math.max(0,v*arcmin-backlash)),   // each source's worst-case backlash adder [′]
            stiff, stiffMesh:kmesh,
            ripple:(Math.max(...bs)-Math.min(...bs))*1e6,
            rmargin:Math.min(...rmargins)*arcmin, n_eng:Math.min(...nes),
            sigmaH:sigMax, safety:(sigMax>1e-9?SH_LIM/sigMax:Infinity), sysLM,
-           outSigma:OUT.sigma, outSafety:OUT.safety, outNeng:OUT.neng, outBL:OUT.bl*arcmin, L10rev, Peq };
+           outSigma:OUT.sigma, outSafety:OUT.safety, outNeng:OUT.neng, outBL:OUT.bl*arcmin, L10rev, Peq,
+           eta, etaBd, vsMax, pvMax };
 }
 // Thermal-clearance drift: at temperature only the pin-circle-vs-disc CTE mismatch shifts the mesh
 // (verified: uniform all-steel ΔT leaves angular backlash invariant — a similarity transform). Working in
@@ -692,6 +710,7 @@ const TXT = {
   lbl_dt:       { en:'temp rise ΔT', zh:'温升 ΔT' },
   lbl_cteh:     { en:'housing CTE', zh:'壳体热膨胀' },
   lbl_cted:     { en:'gear CTE', zh:'摆线盘热膨胀' },
+  lbl_mu:       { en:'friction µ', zh:'摩擦系数 µ' },
   warn:         { en:"Geometry undercuts — the unmodified tooth can't mesh with all pins. Reduce E or increase Rb.",
                   zh:'几何根切 —— 未修型齿廓无法与全部针齿共轭啮合。请减小 E 或增大 Rb。' },
   mesh_h:       { en:'Mesh', zh:'啮合' },
@@ -740,6 +759,11 @@ const TXT = {
   m_thermal:    { en:'thermal drift', zh:'热漂移' },
   sub_thermal:  { en:'backlash at ΔT · housing↔gear CTE mismatch', zh:'温升下背隙 · 壳体↔盘热膨胀失配' },
   th_off:       { en:'set ΔT to check', zh:'设温升以检查' },
+  m_eff:        { en:'mesh efficiency', zh:'啮合效率' },
+  sub_eff:      { en:'sliding loss · fwd / backdrive · excl. bearings-seals', zh:'滑动损耗 · 正驱/反驱 · 不含轴承密封' },
+  m_wear:       { en:'sliding / wear', zh:'滑动 / 磨损' },
+  sub_wear:     { en:'peak slip · PV scuffing-wear index', zh:'峰值滑动 · PV 胶合磨损指标' },
+  nonbd:        { en:'non-backdrive', zh:'不可逆' },
   tooth_h:      { en:'Tooth flank', zh:'齿面' },
   tooth_aux:    { en:'one tooth · modification', zh:'单齿 · 修型' },
   lg_unmod:     { en:'unmodified (pure conjugate)', zh:'未修型（纯共轭）' },
@@ -954,6 +978,8 @@ function updateMetrics(){
   const th=thermalDrift(state.offset,state.coeffs);
   set('m-thermal',  th.active? `${fmt(th.backlash)}<u>′ @${DELTA_T|0}°C · ${th.dRb>0?'+':''}${fmt(th.dRb,1)}µm</u>${th.jam?` <u>${t('jamword')}</u>`:''}` : `<u>${t('th_off')}</u>`,
                     th.active&&th.jam?'bad':(th.active&&th.rmargin<0.5?'warn':''));
+  set('m-eff',      `${fmt(r.eta*100,1)}<u>% · back ${r.etaBd>0?fmt(r.etaBd*100,0)+'%':t('nonbd')}</u>`);
+  set('m-wear',     `${fmt(r.vsMax,2)}<u> mm/rad · PV ${fmt(r.pvMax,0)}</u>`);
   I('jam').classList.toggle('on', r.rmargin<=0);
   // error budget: each source's worst-case backlash adder, biggest first → tells you what to tighten
   const names=[t('src_prof'),t('src_pin'),t('src_hole'),t('src_ecc')];
@@ -1042,6 +1068,7 @@ function readSpec(){   // durability / lost-motion spec — affects metrics only
   DELTA_T=clampNum(+I('g-dt').value||0, -100, 300);
   CTE_H  =clampNum(+I('g-cteh').value||23, 0, 50)/1e6;
   CTE_D  =clampNum(+I('g-cted').value||11.5, 0, 50)/1e6;
+  MU_MESH=clampNum(+I('g-mu').value||0.06, 0.01, 0.2);
   rebuildOutStage();   // output stage depends only on geometry/spec — recompute here, cache in OUT
 }
 function readErr(){   // manufacturing plan → per-source half-bands [µm]
@@ -1070,7 +1097,7 @@ document.querySelectorAll('.presets button').forEach(b=>b.addEventListener('clic
 I('s-offset').addEventListener('input',e=>{ state.offset=clampNum(+e.target.value/1e3,-0.1,-0.015); afterChange(); });
 for(let k=1;k<=NK;k++){ I('s-c'+k).addEventListener('input',e=>{ state.coeffs[k-1]=+e.target.value/1e3; afterChange(); }); }
 ['g-Rb','g-Rr','g-E','g-N','g-T'].forEach(id=>I(id).addEventListener('input',applyGeometry));
-['g-thick','g-cbear','g-cout','g-rw','g-zw','g-rwp','g-cbrg','g-nin','g-dt','g-cteh','g-cted'].forEach(id=>I(id).addEventListener('input',()=>{ readSpec(); scheduleMetrics(); }));
+['g-thick','g-cbear','g-cout','g-rw','g-zw','g-rwp','g-cbrg','g-nin','g-dt','g-cteh','g-cted','g-mu'].forEach(id=>I(id).addEventListener('input',()=>{ readSpec(); scheduleMetrics(); }));
 // process picker fills the µm field; editing the field flips the picker to "custom"
 [['p-prof','e-prof'],['p-pin','e-pin'],['p-hole','e-hole'],['p-ecc','e-ecc']].forEach(([ps,es])=>{
   I(ps).addEventListener('change',()=>{ const v=I(ps).value; if(v!=='c') I(es).value=v; errChanged(); });
