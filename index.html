@@ -245,6 +245,7 @@
       <div class="field"><label><span data-i18n="lbl_cted">gear CTE</span> <span class="unit">µm/m·K</span></label><input id="g-cted" type="number" value="11.5" min="0" max="50" step="0.5"></div>
       <div class="field"><label><span data-i18n="lbl_mu">friction µ</span></label><input id="g-mu" type="number" value="0.06" min="0.01" max="0.2" step="0.01"></div>
       <div class="field"><label><span data-i18n="lbl_ndisc">discs (phased)</span></label><input id="g-ndisc" type="number" value="1" min="1" max="3" step="1"></div>
+      <div class="field"><label><span data-i18n="lbl_rtool">tool radius</span> <span class="unit">mm</span></label><input id="g-rtool" type="number" value="0.1" min="0.02" max="5" step="0.05"></div>
     </div>
     <div class="mfg">
       <h3 data-i18n="mfg_h">Manufacturing plan — pick how each part is made; the ±µm numbers are editable if you know your shop better</h3>
@@ -355,6 +356,7 @@
         <div class="metric"><span class="k"><span data-i18n="m_eff">mesh efficiency</span><small data-i18n="sub_eff">sliding loss · fwd / backdrive · excl. bearings-seals</small></span><span class="v" id="m-eff"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_wear">sliding / wear</span><small data-i18n="sub_wear">peak slip · PV scuffing-wear index</small></span><span class="v" id="m-wear"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_preload">preload for zero backlash</span><small data-i18n="sub_preload">min interference · no-load stiffness · drag</small></span><span class="v" id="m-preload"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_minr">min flank radius</span><small data-i18n="sub_minr">tightest concave curvature vs finishing tool</small></span><span class="v" id="m-minr"></span></div>
       </div>
     </div>
 
@@ -437,6 +439,7 @@ let OUT={k:Infinity,bl:0,sigma:0,safety:Infinity,neng:0};   // output-stage resu
 let DELTA_T=0.0, CTE_H=23.0e-6, CTE_D=11.5e-6;
 let MU_MESH=0.06;   // boundary/EP-grease friction coeff at pin contacts → mesh efficiency + PV wear index (sliding loss only, excl. bearings/seals)
 let N_DISC=1;       // number of phased cycloid discs (1/2/3) — phased superposition cancels TE-ripple harmonics not a multiple of N_DISC
+let R_TOOL=0.1;     // finishing tool radius [mm] (wire-EDM wire ~0.1, form-grinding wheel 0.5–3) — min concave flank radius must exceed it
 const K_CONTACT=5.0e4;
 const ESTAR=115385.0, SH_LIM=1500.0;   // steel-steel Hertz E* [MPa] (1/E*=2(1-0.3²)/210000); contact-fatigue limit [MPa]
 let ROT_SIGN=-1.0, GEOM_WORST=0;
@@ -542,6 +545,19 @@ function rebuildOutStage(){
   }
   OUT={ k:kmin/1e3/arcmin, bl:blmax, sigma:smax, safety:(smax>1e-9?SH_LIM/smax:Infinity), neng:nmin };
 }
+// Manufacturability / validity of the modified flank: min radius of curvature over the CONCAVE (valley)
+// regions a finishing wheel must enter (must exceed the tool radius), and a self-intersection/cusp check —
+// the equidistant offset folds where its speed →0, so a near-zero min profile speed flags an invalid curve.
+function profileHealth(X,Y){
+  const n=X.length; let rmin=1e9, minSp=Infinity, meanSp=0;
+  for(let i=0;i<n;i++){ const im=(i-1+n)%n, ip=(i+1)%n;
+    const tx=(X[ip]-X[im])*0.5, ty=(Y[ip]-Y[im])*0.5;
+    const ax=X[ip]-2*X[i]+X[im], ay=Y[ip]-2*Y[i]+Y[im];
+    const sp=Math.hypot(tx,ty); if(sp<minSp)minSp=sp; meanSp+=sp;
+    if((ax*X[i]+ay*Y[i])>0){ const kap=Math.abs((tx*ay-ty*ax)/(sp*sp*sp||1e-12)), rho=kap>1e-9?1/kap:1e9; if(rho<rmin)rmin=rho; }
+  }
+  return { rmin, cusp: minSp < 0.02*(meanSp/n) };
+}
 // n-disc phased superposition of the loaded wind-up waveform: disc k is offset by k/nd of a crank rev, so
 // the net output TE cancels every ripple harmonic whose order is NOT a multiple of nd (2 discs kill the odd
 // orders incl. the dominant fundamental; 3 discs kill non-multiples-of-3). Interpolated → any sample count.
@@ -603,7 +619,7 @@ function evaluate(offset,coeffs,nPts,variant){
            rmargin:Math.min(...rmargins)*arcmin, n_eng:Math.min(...nes),
            sigmaH:sigMax, safety:(sigMax>1e-9?SH_LIM/sigMax:Infinity), sysLM,
            outSigma:OUT.sigma, outSafety:OUT.safety, outNeng:OUT.neng, outBL:OUT.bl*arcmin, L10rev, Peq,
-           eta, etaBd, vsMax, pvMax };
+           eta, etaBd, vsMax, pvMax, ...profileHealth(prof.X,prof.Y) };
 }
 // Thermal-clearance drift: at temperature only the pin-circle-vs-disc CTE mismatch shifts the mesh
 // (verified: uniform all-steel ΔT leaves angular backlash invariant — a similarity transform). Working in
@@ -782,6 +798,7 @@ const TXT = {
   lbl_cted:     { en:'gear CTE', zh:'摆线盘热膨胀' },
   lbl_mu:       { en:'friction µ', zh:'摩擦系数 µ' },
   lbl_ndisc:    { en:'discs (phased)', zh:'摆线盘数(相位)' },
+  lbl_rtool:    { en:'tool radius', zh:'刀具半径' },
   warn:         { en:"Geometry undercuts — the unmodified tooth can't mesh with all pins. Reduce E or increase Rb.",
                   zh:'几何根切 —— 未修型齿廓无法与全部针齿共轭啮合。请减小 E 或增大 Rb。' },
   mesh_h:       { en:'Mesh', zh:'啮合' },
@@ -837,6 +854,9 @@ const TXT = {
   nonbd:        { en:'non-backdrive', zh:'不可逆' },
   m_preload:    { en:'preload for zero backlash', zh:'零背隙预紧' },
   sub_preload:  { en:'min interference · no-load stiffness k₀ · drag', zh:'最小过盈 · 空载刚度 k₀ · 拖曳扭矩' },
+  m_minr:       { en:'min flank radius', zh:'最小齿面半径' },
+  sub_minr:     { en:'tightest concave curvature vs finishing tool', zh:'最紧凹曲率 vs 精加工刀具' },
+  cuspword:     { en:'⚠ self-intersects (cusp)', zh:'⚠ 自交(尖点)' },
   tooth_h:      { en:'Tooth flank', zh:'齿面' },
   tooth_aux:    { en:'one tooth · modification', zh:'单齿 · 修型' },
   lg_unmod:     { en:'unmodified (pure conjugate)', zh:'未修型（纯共轭）' },
@@ -1055,6 +1075,8 @@ function updateMetrics(){
   set('m-wear',     `${fmt(r.vsMax,2)}<u> mm/rad · PV ${fmt(r.pvMax,0)}</u>`);
   const pl=preloadReport(state.offset,state.coeffs);
   set('m-preload',  `≥${fmt(pl.pmin,0)}<u>µm → k₀ ${fmt(pl.kNoLoad,0)} · drag ${fmt(pl.drag,2)}N·m</u>`);
+  set('m-minr',     r.cusp? `<u>${t('cuspword')}</u>` : `${fmt(r.rmin,2)}<u>mm ${r.rmin>=R_TOOL?'✓':'✗'} vs tool ${R_TOOL}</u>`,
+                    r.cusp||r.rmin<R_TOOL?'bad':'');
   I('jam').classList.toggle('on', r.rmargin<=0);
   // error budget: each source's TRUE p95 contribution (shut-off = re-sample with that source removed),
   // biggest first → tells you which tolerance to tighten. Correctly de-ranks the per-unit-independent hole
@@ -1148,6 +1170,7 @@ function readSpec(){   // durability / lost-motion spec — affects metrics only
   CTE_D  =clampNum(+I('g-cted').value||11.5, 0, 50)/1e6;
   MU_MESH=clampNum(+I('g-mu').value||0.06, 0.01, 0.2);
   N_DISC =Math.round(clampNum(+I('g-ndisc').value||1, 1, 3));
+  R_TOOL =clampNum(+I('g-rtool').value||0.1, 0.02, 5);
   rebuildOutStage();   // output stage depends only on geometry/spec — recompute here, cache in OUT
 }
 function readErr(){   // manufacturing plan → per-source half-bands [µm]
@@ -1176,7 +1199,7 @@ document.querySelectorAll('.presets button').forEach(b=>b.addEventListener('clic
 I('s-offset').addEventListener('input',e=>{ state.offset=clampNum(+e.target.value/1e3,-0.1,-0.015); afterChange(); });
 for(let k=1;k<=NK;k++){ I('s-c'+k).addEventListener('input',e=>{ state.coeffs[k-1]=+e.target.value/1e3; afterChange(); }); }
 ['g-Rb','g-Rr','g-E','g-N','g-T'].forEach(id=>I(id).addEventListener('input',applyGeometry));
-['g-thick','g-cbear','g-cout','g-rw','g-zw','g-rwp','g-cbrg','g-nin','g-dt','g-cteh','g-cted','g-mu','g-ndisc'].forEach(id=>I(id).addEventListener('input',()=>{ readSpec(); scheduleMetrics(); }));
+['g-thick','g-cbear','g-cout','g-rw','g-zw','g-rwp','g-cbrg','g-nin','g-dt','g-cteh','g-cted','g-mu','g-ndisc','g-rtool'].forEach(id=>I(id).addEventListener('input',()=>{ readSpec(); scheduleMetrics(); }));
 // process picker fills the µm field; editing the field flips the picker to "custom"
 [['p-prof','e-prof'],['p-pin','e-pin'],['p-hole','e-hole'],['p-ecc','e-ecc']].forEach(([ps,es])=>{
   I(ps).addEventListener('change',()=>{ const v=I(ps).value; if(v!=='c') I(es).value=v; errChanged(); });
@@ -1200,7 +1223,13 @@ function invalidateOpt(){ if(!OPT.ran) return; stopWorker(); OPT.running=false; 
 
 // Worker source: physics (K-harmonic) + a proper NSGA-II. Self-contained (Blob) so it works offline / on Pages.
 const WORKER_SRC = `
-var Rb,Rr,E,N,M,Np,DWC,T_RATED,K_CONTACT,ROT,PINS,NK,OUT_K,N_DISC;
+var Rb,Rr,E,N,M,Np,DWC,T_RATED,K_CONTACT,ROT,PINS,NK,OUT_K,N_DISC,R_TOOL;
+function profileHealth(X,Y){ var n=X.length,rmin=1e9,minSp=Infinity,meanSp=0,i;
+  for(i=0;i<n;i++){ var im=(i-1+n)%n, ip=(i+1)%n;
+    var tx=(X[ip]-X[im])*0.5, ty=(Y[ip]-Y[im])*0.5, ax=X[ip]-2*X[i]+X[im], ay=Y[ip]-2*Y[i]+Y[im];
+    var sp=Math.hypot(tx,ty); if(sp<minSp)minSp=sp; meanSp+=sp;
+    if((ax*X[i]+ay*Y[i])>0){ var kap=Math.abs((tx*ay-ty*ax)/(sp*sp*sp||1e-12)), rho=kap>1e-9?1/kap:1e9; if(rho<rmin)rmin=rho; } }
+  return { rmin:rmin, cusp: minSp < 0.02*(meanSp/n) }; }
 function phasedPtp(bs,nd){ var ns=bs.length,mn=Infinity,mx=-Infinity,i,k;
   if(nd<=1){ for(i=0;i<ns;i++){ if(bs[i]<mn)mn=bs[i]; if(bs[i]>mx)mx=bs[i]; } return mx-mn; }
   for(i=0;i<ns;i++){ var s=0; for(k=0;k<nd;k++){ var x=i+ns*k/nd, i0=Math.floor(x)%ns, f=x-Math.floor(x); s+=bs[i0]*(1-f)+bs[(i0+1)%ns]*f; } s/=nd; if(s<mn)mn=s; if(s>mx)mx=s; }
@@ -1259,10 +1288,12 @@ function evalFast(offset,coeffs){
   }
   var kmesh=Math.min.apply(null,ks)/1e3/arcmin;
   var ksys=(OUT_K>0&&isFinite(OUT_K))? 1/(1/kmesh+1/OUT_K) : kmesh;   // series with output pin-hole stage (matches main panel)
+  var H=profileHealth(prof.X,prof.Y);
   return { backlash:Math.max.apply(null,plays)*arcmin, blmax:Math.max.apply(null,blmaxs)*arcmin,
            stiff:ksys,
            ripple:phasedPtp(bs,N_DISC)*1e6,
-           rmargin:Math.min.apply(null,rmargins)*arcmin, n_eng:Math.min.apply(null,nes), maxPA:paMax, sigmaH:sigMax };
+           rmargin:Math.min.apply(null,rmargins)*arcmin, n_eng:Math.min.apply(null,nes), maxPA:paMax, sigmaH:sigMax,
+           rmin:H.rmin, cusp:H.cusp };
 }
 var LO=[-0.10,-0.04,-0.04,-0.04,-0.04], HI=[-0.015,0.04,0.04,0.04,0.04], D=5, POP=48, GEN=44, SEEDS=[];
 function rnd(a,b){return a+Math.random()*(b-a);}
@@ -1272,6 +1303,7 @@ function evalx(x){ var coeffs=x.slice(1), r=evalFast(x[0],coeffs), dmax=x[0];
   for(var i=0;i<coeffs.length;i++)dmax+=Math.abs(coeffs[i]);
   var cv=0; if(dmax>-0.005)cv+=(dmax+0.005)*100; if(!isFinite(r.ripple))cv+=100;
   if(r.rmargin<0.05)cv+=(0.05-r.rmargin); if(r.n_eng<2)cv+=1;   // robust: must survive worst machining error
+  if(r.cusp)cv+=100; if(r.rmin<R_TOOL)cv+=(R_TOOL-r.rmin)*10;   // manufacturable: no self-intersection, concave radius ≥ tool
   r.f=[r.backlash,-r.stiff,r.ripple,r.maxPA]; r.cv=cv; r.x=x; return r; }
 function dom(a,b){ if(a.cv>0||b.cv>0) return a.cv<b.cv;
   var le=true,lt=false; for(var k=0;k<4;k++){ if(a.f[k]>b.f[k]+1e-12)le=false; if(a.f[k]<b.f[k]-1e-12)lt=true; } return le&&lt; }
@@ -1314,7 +1346,7 @@ function run(){
   }
   postMessage({type:'done', pct:100, front:frontOut(pop)});
 }
-onmessage=function(e){ var g=e.data; Rb=g.Rb;Rr=g.Rr;E=g.E;N=g.N;M=g.M;Np=g.Np;DWC=g.DWC||0;T_RATED=g.T_RATED;K_CONTACT=g.K_CONTACT;ROT=g.ROT;PINS=g.PINS;NK=g.NK;OUT_K=g.OUT_K;N_DISC=g.N_DISC||1;SEEDS=g.SEEDS||[];L_TOOTH=g.L_TOOTH||10;ESTAR=g.ESTAR||115385; run(); };
+onmessage=function(e){ var g=e.data; Rb=g.Rb;Rr=g.Rr;E=g.E;N=g.N;M=g.M;Np=g.Np;DWC=g.DWC||0;T_RATED=g.T_RATED;K_CONTACT=g.K_CONTACT;ROT=g.ROT;PINS=g.PINS;NK=g.NK;OUT_K=g.OUT_K;N_DISC=g.N_DISC||1;R_TOOL=g.R_TOOL||0.1;SEEDS=g.SEEDS||[];L_TOOTH=g.L_TOOTH||10;ESTAR=g.ESTAR||115385; run(); };
 `;
 
 function runOptimize(){
@@ -1339,7 +1371,7 @@ function runOptimize(){
   for(const p of Object.values(PRESETS)) SEEDS.push([p.offset].concat(p.coeffs));
   SEEDS.push([state.offset].concat(state.coeffs.slice(0,NK)));
   for(let off=-0.017; off>=-0.098; off-=0.006){ SEEDS.push([off,-0.0012,-0.0037,0,0]); SEEDS.push([off,0,0,0,0]); }
-  wk.postMessage({ Rb,Rr,E,N,M,Np,DWC:dwc(),T_RATED,K_CONTACT,ROT:ROT_SIGN, PINS, NK, OUT_K:OUT.k, N_DISC, SEEDS, L_TOOTH, ESTAR });
+  wk.postMessage({ Rb,Rr,E,N,M,Np,DWC:dwc(),T_RATED,K_CONTACT,ROT:ROT_SIGN, PINS, NK, OUT_K:OUT.k, N_DISC, R_TOOL, SEEDS, L_TOOTH, ESTAR });
 }
 // goal-driven, judged on the AS-BUILT backlash: tier 1 = worst-case bound meets the target, tier 2 =
 // 95% Monte-Carlo yield meets it, else miss with a self-calibrated "shrink to ±X µm, start with Y"
