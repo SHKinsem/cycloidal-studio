@@ -240,6 +240,9 @@
       <div class="field"><label><span data-i18n="lbl_rwp">output pin r</span> <span class="unit">mm</span></label><input id="g-rwp" type="number" value="3" min="0.5" max="20" step="0.1"></div>
       <div class="field"><label><span data-i18n="lbl_cbrg">ecc-bearing C</span> <span class="unit">N</span></label><input id="g-cbrg" type="number" value="10000" min="100" max="1000000" step="100"></div>
       <div class="field"><label><span data-i18n="lbl_nin">input speed</span> <span class="unit">rpm</span></label><input id="g-nin" type="number" value="0" min="0" max="100000" step="100"></div>
+      <div class="field"><label><span data-i18n="lbl_dt">temp rise ΔT</span> <span class="unit">°C</span></label><input id="g-dt" type="number" value="0" min="-100" max="300" step="5"></div>
+      <div class="field"><label><span data-i18n="lbl_cteh">housing CTE</span> <span class="unit">µm/m·K</span></label><input id="g-cteh" type="number" value="23" min="0" max="50" step="0.5"></div>
+      <div class="field"><label><span data-i18n="lbl_cted">gear CTE</span> <span class="unit">µm/m·K</span></label><input id="g-cted" type="number" value="11.5" min="0" max="50" step="0.5"></div>
     </div>
     <div class="mfg">
       <h3 data-i18n="mfg_h">Manufacturing plan — pick how each part is made; the ±µm numbers are editable if you know your shop better</h3>
@@ -346,6 +349,7 @@
         <div class="metric"><span class="k"><span data-i18n="m_teeth">loaded teeth</span><small data-i18n="sub_teeth">sharing the rated torque</small></span><span class="v" id="m-teeth"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_ostress">output-pin stress</span><small data-i18n="sub_ostress">Hertz on output pins · safety</small></span><span class="v" id="m-ostress"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_life">bearing life</span><small data-i18n="sub_life">eccentric-bearing L10 · mesh reaction only</small></span><span class="v" id="m-life"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_thermal">thermal drift</span><small data-i18n="sub_thermal">backlash at ΔT · housing↔gear CTE mismatch</small></span><span class="v" id="m-thermal"></span></div>
       </div>
     </div>
 
@@ -423,6 +427,9 @@ let L_TOOTH=10.0, C_BEAR=0.0, C_OUT=0.0;   // disk thickness [mm]; input-bearing
 // RW_PIN = output-pin/roller radius [mm]; C_BRG = eccentric-bearing dynamic capacity C [N]; N_IN = input speed [rpm] (0 ⇒ report revs only).
 let R_W=20.0, Z_W=8, RW_PIN=3.0, C_BRG=10000.0, N_IN=0.0;
 let OUT={k:Infinity,bl:0,sigma:0,safety:Infinity,neng:0};   // output-stage results — geometry-only (profile-independent), cached per geometry/spec change
+// thermal-drift: only the housing↔disc CTE MISMATCH moves clearance — uniform expansion is a similarity
+// transform (angular backlash invariant). DELTA_T = operating rise [°C]; CTE_H/CTE_D = housing/disc CTE [1/K].
+let DELTA_T=0.0, CTE_H=23.0e-6, CTE_D=11.5e-6;
 const K_CONTACT=5.0e4;
 const ESTAR=115385.0, SH_LIM=1500.0;   // steel-steel Hertz E* [MPa] (1/E*=2(1-0.3²)/210000); contact-fatigue limit [MPa]
 let ROT_SIGN=-1.0, GEOM_WORST=0;
@@ -564,6 +571,23 @@ function evaluate(offset,coeffs,nPts,variant){
            sigmaH:sigMax, safety:(sigMax>1e-9?SH_LIM/sigMax:Infinity), sysLM,
            outSigma:OUT.sigma, outSafety:OUT.safety, outNeng:OUT.neng, outBL:OUT.bl*arcmin, L10rev, Peq };
 }
+// Thermal-clearance drift: at temperature only the pin-circle-vs-disc CTE mismatch shifts the mesh
+// (verified: uniform all-steel ΔT leaves angular backlash invariant — a similarity transform). Working in
+// the disc's thermal frame, the pin circle moves radially by (CTE_H−CTE_D)·ΔT·Rb against the fixed flank;
+// hot (Al housing) opens clearance, cold tightens → cold-start jam. Re-runs the gap field, restores Rb/PINS.
+function thermalDrift(offset,coeffs){
+  const dRel=(CTE_H-CTE_D)*DELTA_T, arcmin=180/Math.PI*60;
+  if(DELTA_T===0 || Math.abs(dRel)<1e-12) return {active:false};
+  const prof=profile(offset,coeffs,4000), DW=dwc(), Rb0=Rb, PINS0=PINS;
+  Rb=Rb0*(1+dRel); rebuildPins();
+  let blmax=0, rmin=Infinity;
+  for(let i=0;i<24;i++){ const ms=meshState(prof,2*Math.PI/N*i/24);
+    const [lo,hi]=playRange(ms.gaps,ms.arms); if(hi-lo>blmax)blmax=hi-lo;
+    const [tlo,thi]=playRange(ms.gaps,ms.arms,DW); if(thi-tlo<rmin)rmin=thi-tlo;
+  }
+  Rb=Rb0; PINS=PINS0;   // restore the nominal geometry
+  return {active:true, backlash:blmax*arcmin, rmargin:rmin*arcmin, jam:rmin<=0, dRb:dRel*Rb0*1e3};
+}
 // Monte-Carlo as-built prediction: sample every manufacturing-error source over its ± band, rebuild
 // the gap field, and read off the backlash distribution + jam risk of the units you'd actually make.
 // Eccentricity error = the disk was CUT for the nominal E but the shaft throw came out E±e, so only
@@ -665,6 +689,9 @@ const TXT = {
   lbl_rwp:      { en:'output pin r', zh:'输出销半径' },
   lbl_cbrg:     { en:'ecc-bearing C', zh:'偏心轴承额定 C' },
   lbl_nin:      { en:'input speed', zh:'输入转速' },
+  lbl_dt:       { en:'temp rise ΔT', zh:'温升 ΔT' },
+  lbl_cteh:     { en:'housing CTE', zh:'壳体热膨胀' },
+  lbl_cted:     { en:'gear CTE', zh:'摆线盘热膨胀' },
   warn:         { en:"Geometry undercuts — the unmodified tooth can't mesh with all pins. Reduce E or increase Rb.",
                   zh:'几何根切 —— 未修型齿廓无法与全部针齿共轭啮合。请减小 E 或增大 Rb。' },
   mesh_h:       { en:'Mesh', zh:'啮合' },
@@ -710,6 +737,9 @@ const TXT = {
   sub_ostress:  { en:'Hertz on output pins · safety', zh:'输出销赫兹应力 · 安全系数' },
   m_life:       { en:'bearing life', zh:'轴承寿命' },
   sub_life:     { en:'eccentric-bearing L10 · mesh reaction only', zh:'偏心轴承 L10 · 仅啮合反力' },
+  m_thermal:    { en:'thermal drift', zh:'热漂移' },
+  sub_thermal:  { en:'backlash at ΔT · housing↔gear CTE mismatch', zh:'温升下背隙 · 壳体↔盘热膨胀失配' },
+  th_off:       { en:'set ΔT to check', zh:'设温升以检查' },
   tooth_h:      { en:'Tooth flank', zh:'齿面' },
   tooth_aux:    { en:'one tooth · modification', zh:'单齿 · 修型' },
   lg_unmod:     { en:'unmodified (pure conjugate)', zh:'未修型（纯共轭）' },
@@ -921,6 +951,9 @@ function updateMetrics(){
   set('m-teeth',    `${r.n_eng}<u>/ ${Np}</u>`);
   set('m-ostress',  `${fmt(r.outSigma,0)}<u>MPa · ${fmt(r.outSafety,2)}×</u>`, r.outSafety<1?'bad':(r.outSafety<1.2?'warn':''));
   set('m-life',     lifeStr(r));
+  const th=thermalDrift(state.offset,state.coeffs);
+  set('m-thermal',  th.active? `${fmt(th.backlash)}<u>′ @${DELTA_T|0}°C · ${th.dRb>0?'+':''}${fmt(th.dRb,1)}µm</u>${th.jam?` <u>${t('jamword')}</u>`:''}` : `<u>${t('th_off')}</u>`,
+                    th.active&&th.jam?'bad':(th.active&&th.rmargin<0.5?'warn':''));
   I('jam').classList.toggle('on', r.rmargin<=0);
   // error budget: each source's worst-case backlash adder, biggest first → tells you what to tighten
   const names=[t('src_prof'),t('src_pin'),t('src_hole'),t('src_ecc')];
@@ -1006,6 +1039,9 @@ function readSpec(){   // durability / lost-motion spec — affects metrics only
   RW_PIN=clampNum(+I('g-rwp').value||3, 0.5, 20);
   C_BRG=clampNum(+I('g-cbrg').value||10000, 100, 1e6);
   N_IN =clampNum(+I('g-nin').value||0, 0, 100000);
+  DELTA_T=clampNum(+I('g-dt').value||0, -100, 300);
+  CTE_H  =clampNum(+I('g-cteh').value||23, 0, 50)/1e6;
+  CTE_D  =clampNum(+I('g-cted').value||11.5, 0, 50)/1e6;
   rebuildOutStage();   // output stage depends only on geometry/spec — recompute here, cache in OUT
 }
 function readErr(){   // manufacturing plan → per-source half-bands [µm]
@@ -1034,7 +1070,7 @@ document.querySelectorAll('.presets button').forEach(b=>b.addEventListener('clic
 I('s-offset').addEventListener('input',e=>{ state.offset=clampNum(+e.target.value/1e3,-0.1,-0.015); afterChange(); });
 for(let k=1;k<=NK;k++){ I('s-c'+k).addEventListener('input',e=>{ state.coeffs[k-1]=+e.target.value/1e3; afterChange(); }); }
 ['g-Rb','g-Rr','g-E','g-N','g-T'].forEach(id=>I(id).addEventListener('input',applyGeometry));
-['g-thick','g-cbear','g-cout','g-rw','g-zw','g-rwp','g-cbrg','g-nin'].forEach(id=>I(id).addEventListener('input',()=>{ readSpec(); scheduleMetrics(); }));
+['g-thick','g-cbear','g-cout','g-rw','g-zw','g-rwp','g-cbrg','g-nin','g-dt','g-cteh','g-cted'].forEach(id=>I(id).addEventListener('input',()=>{ readSpec(); scheduleMetrics(); }));
 // process picker fills the µm field; editing the field flips the picker to "custom"
 [['p-prof','e-prof'],['p-pin','e-pin'],['p-hole','e-hole'],['p-ecc','e-ecc']].forEach(([ps,es])=>{
   I(ps).addEventListener('change',()=>{ const v=I(ps).value; if(v!=='c') I(es).value=v; errChanged(); });
