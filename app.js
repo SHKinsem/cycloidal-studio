@@ -529,12 +529,13 @@ function runOptimize(){
 // ponytail: the MC runs only on the picked design (front-wide MC would cost ~2 s for little gain).
 function applyGoalPick(autoload){
   if(!OPT.front.length) return;
-  // THE best curve: the front is already feasible + manufacturable (GA constraints), so pick the balanced
-  // optimum — minimise backlash (primary) and wind-up ripple / smoothest backdrive (secondary). Efficiency
-  // is near-constant across the front, so it is reported, not traded.
-  const F=OPT.front, blMax=Math.max(...F.map(d=>d.backlash))||1, rpMax=Math.max(...F.map(d=>d.ripple))||1;
-  const score=d=>d.backlash/blMax + 0.5*d.ripple/rpMax;
-  OPT.sel = F.indexOf(F.reduce((a,b)=>score(b)<score(a)?b:a));
+  // THE best curve: backlash is the user's #1 priority, so pick lexicographically — take essentially the
+  // minimum backlash (within 0.5′ of the best on the front), then the smoothest / lowest-ripple among those.
+  // The front is already feasible + manufacturable (GA constraints) and comes from the archive of the best
+  // designs ever found, so this never returns worse backlash than the seeded GA-optimum preset.
+  const F=OPT.front, blMin=Math.min(...F.map(d=>d.backlash));
+  const near=F.filter(d=>d.backlash<=blMin+0.5);
+  OPT.sel = F.indexOf(near.reduce((a,b)=>b.ripple<a.ripple?b:a));
   const d=F[OPT.sel];
   if(autoload){ state.offset=d.offset; state.coeffs=d.coeffs.slice(); afterChange(); }
   const eta=evaluate(d.offset,d.coeffs).eta;   // efficiency is main-thread only

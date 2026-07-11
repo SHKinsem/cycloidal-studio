@@ -53,16 +53,26 @@ function tour(P){ var a=P[Math.floor(Math.random()*P.length)], b=P[Math.floor(Ma
 function cross(p1,p2){ var c1=[],c2=[]; for(var i=0;i<D;i++){ var lo=Math.min(p1.x[i],p2.x[i]), hi=Math.max(p1.x[i],p2.x[i]), d=hi-lo||1e-6;
   c1.push(clamp(lo-0.25*d+Math.random()*1.5*d,LO[i],HI[i])); c2.push(clamp(lo-0.25*d+Math.random()*1.5*d,LO[i],HI[i])); } return [c1,c2]; }
 function mutate(x){ for(var i=0;i<D;i++) if(Math.random()<0.25) x[i]=clamp(x[i]+(Math.random()-0.5)*(HI[i]-LO[i])*0.15,LO[i],HI[i]); return x; }
-function frontOut(pop){ var feas=pop.filter(function(p){return p.cv===0;});
-  var nd=feas.filter(function(p,i){ for(var j=0;j<feas.length;j++){ if(j!==i && dom(feas[j],p)) return false; } return true; });
-  var out=[]; nd.forEach(function(p){ if(!out.some(function(q){return Math.abs(q.backlash-p.backlash)<0.05 && Math.abs(q.stiff-p.stiff)<0.2;}))
-    out.push({offset:p.x[0],coeffs:p.x.slice(1),backlash:p.backlash,blmax:p.blmax,stiff:p.stiff,ripple:p.ripple,maxPA:p.maxPA,rmargin:p.rmargin,n_eng:p.n_eng,sigmaH:p.sigmaH}); });
-  return out; }
+// External archive: every feasible non-dominated design EVER found is retained, so the plotted front only
+// grows/refines (points no longer vanish between generations just because the population moved) and the
+// final pick is the GLOBAL best — not whatever survived the last generation. Deduped by (backlash, stiffness).
+// Because the archive always holds the seeded designs (incl. the GA-optimum preset), the result can never
+// come out worse than that preset.
+var ARCH=[];
+function updateArch(pop){
+  var pool=ARCH.slice();
+  for(var i=0;i<pop.length;i++) if(pop[i].cv===0) pool.push(pop[i]);
+  var nd=pool.filter(function(p,i){ for(var j=0;j<pool.length;j++){ if(j!==i && dom(pool[j],p)) return false; } return true; });
+  var uniq=[]; nd.forEach(function(p){ if(!uniq.some(function(q){return Math.abs(q.backlash-p.backlash)<0.05 && Math.abs(q.stiff-p.stiff)<0.2;})) uniq.push(p); });
+  ARCH=uniq;
+}
+function toOut(list){ return list.map(function(p){ return {offset:p.x[0],coeffs:p.x.slice(1),backlash:p.backlash,blmax:p.blmax,stiff:p.stiff,ripple:p.ripple,maxPA:p.maxPA,rmargin:p.rmargin,n_eng:p.n_eng,sigmaH:p.sigmaH}; }); }
 function run(){
   var pop=[];  // seed with known-good designs first, then fill with random exploration
   for(var s=0;s<SEEDS.length && pop.length<POP;s++){ var sx=SEEDS[s].slice(0,D); while(sx.length<D)sx.push(0);
     for(var i=0;i<D;i++)sx[i]=clamp(sx[i],LO[i],HI[i]); pop.push(evalx(sx)); }
   while(pop.length<POP)pop.push(evalx(newx()));
+  ARCH=[]; updateArch(pop);
   for(var gen=0; gen<GEN; gen++){
     var off=[]; while(off.length<POP){ var cs=cross(tour(pop),tour(pop)); off.push(evalx(mutate(cs[0]))); if(off.length<POP)off.push(evalx(mutate(cs[1]))); }
     var R=pop.concat(off); var fronts=ndsort(R); var np=[], fi=0;
@@ -70,9 +80,10 @@ function run(){
     if(np.length<POP && fi<fronts.length){ crowd(R,fronts[fi]); var last=fronts[fi].slice().sort(function(a,b){return (R[b].cd||0)-(R[a].cd||0);});
       for(var a=0;a<last.length && np.length<POP;a++)np.push(R[last[a]]); }
     pop=np;
-    postMessage({type:'progress', pct:Math.round(100*(gen+1)/GEN), front:frontOut(pop)});
+    updateArch(pop);
+    postMessage({type:'progress', pct:Math.round(100*(gen+1)/GEN), front:toOut(ARCH)});
   }
-  postMessage({type:'done', pct:100, front:frontOut(pop)});
+  postMessage({type:'done', pct:100, front:toOut(ARCH)});
 }
 onmessage=function(e){ var g=e.data;
   configure({Rb:g.Rb,Rr:g.Rr,E:g.E,N:g.N,T_RATED:g.T_RATED,ROT_SIGN:g.ROT,PINS:g.PINS,L_TOOTH:g.L_TOOTH});
