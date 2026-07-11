@@ -73,6 +73,12 @@
   .warnbar.on { display: block; }
 
   /* ---- manufacturing plan ---- */
+  .advset { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 8px; }
+  .advset:not([open]) > *:not(summary) { display: none; }   /* force-collapse content when closed */
+  .advset > summary { font-family: var(--mono); font-size: 12px; color: var(--ink-3); cursor: pointer; letter-spacing: .04em; list-style: revert; user-select: none; }
+  .advset > summary:hover { color: var(--ink-2, var(--ink-3)); }
+  .advset[open] > summary { margin-bottom: 12px; }
+  .advset .metrics { border-top: none; margin-top: 0; padding-top: 0; }
   .mfg { border-top: 1px dashed var(--line); margin-top: 14px; padding-top: 12px; }
   .mfg h3 { font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); margin: 0 0 10px; font-weight: 500; letter-spacing: .04em; }
   .mfgfields { grid-template-columns: repeat(4, 1fr); }
@@ -231,6 +237,10 @@
       <div class="field"><label><span data-i18n="lbl_E">eccentricity E</span> <span class="unit">mm</span></label><input id="g-E" type="number" value="1.5" min="0.2" max="6" step="0.1"></div>
       <div class="field"><label><span data-i18n="lbl_N">lobes N</span></label><input id="g-N" type="number" value="18" min="6" max="40" step="1"></div>
       <div class="field"><label><span data-i18n="lbl_T">rated torque</span> <span class="unit">N·m</span></label><input id="g-T" type="number" value="30" min="1" max="500" step="1"></div>
+    </div>
+    <details class="advset">
+      <summary data-i18n="adv_params">Advanced (system, durability, thermal — rarely needed; sensible defaults)</summary>
+      <div class="fields">
       <div class="field"><label><span data-i18n="opt_target">target backlash</span> <span class="unit">′</span></label><input id="opt-goal" type="number" value="3" min="0.5" max="30" step="0.5"></div>
       <div class="field"><label><span data-i18n="lbl_thick">disk width</span> <span class="unit">mm</span></label><input id="g-thick" type="number" value="10" min="1" max="100" step="0.5"></div>
       <div class="field"><label><span data-i18n="lbl_cbear">bearing clr.</span> <span class="unit">µm</span></label><input id="g-cbear" type="number" value="0" min="0" max="100" step="1"></div>
@@ -246,7 +256,8 @@
       <div class="field"><label><span data-i18n="lbl_mu">friction µ</span></label><input id="g-mu" type="number" value="0.06" min="0.01" max="0.2" step="0.01"></div>
       <div class="field"><label><span data-i18n="lbl_ndisc">discs (phased)</span></label><input id="g-ndisc" type="number" value="1" min="1" max="3" step="1"></div>
       <div class="field"><label><span data-i18n="lbl_rtool">tool radius</span> <span class="unit">mm</span></label><input id="g-rtool" type="number" value="0.1" min="0.02" max="5" step="0.05"></div>
-    </div>
+      </div>
+    </details>
     <div class="mfg">
       <h3 data-i18n="mfg_h">Manufacturing plan — pick how each part is made; the ±µm numbers are editable if you know your shop better</h3>
       <div class="fields mfgfields">
@@ -343,21 +354,26 @@
       <div class="metrics">
         <div class="metric"><span class="k"><span data-i18n="m_backlash">backlash</span><small data-i18n="sub_backlash">zero-error ideal, mesh only</small></span><span class="v" id="m-backlash"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_asbuilt">as-built backlash</span><small data-i18n="sub_asbuilt">Monte-Carlo over your plan · typical–95%</small></span><span class="v" id="m-asbuilt"></span></div>
-        <div class="metric"><span class="k"><span data-i18n="m_syslm">system lost motion</span><small data-i18n="sub_syslm">mesh + bearing + output coupling</small></span><span class="v" id="m-syslm"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_ripple">ripple</span><small data-i18n="sub_ripple">wind-up variation = smoothness</small></span><span class="v" id="m-ripple"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_eff">mesh efficiency</span><small data-i18n="sub_eff">sliding loss · fwd / backdrive · excl. bearings-seals</small></span><span class="v" id="m-eff"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_stiff">stiffness</span><small data-i18n="sub_stiff">torsional, worst crank angle</small></span><span class="v" id="m-stiff"></span></div>
+      </div>
+      <details class="advset">
+        <summary data-i18n="adv_metrics">More metrics (durability, system, thermal, manufacturability)</summary>
+        <div class="metrics">
+        <div class="metric"><span class="k"><span data-i18n="m_syslm">system lost motion</span><small data-i18n="sub_syslm">mesh + bearing + output coupling</small></span><span class="v" id="m-syslm"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_stress">contact stress</span><small data-i18n="sub_stress">peak Hertz pressure, loaded pin</small></span><span class="v" id="m-stress"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_safety">safety factor</span><small data-i18n="sub_safety">vs 1500 MPa contact-fatigue limit</small></span><span class="v" id="m-safety"></span></div>
-        <div class="metric"><span class="k"><span data-i18n="m_ripple">ripple</span><small data-i18n="sub_ripple">wind-up variation = smoothness</small></span><span class="v" id="m-ripple"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_rmargin">worst-case margin</span><small data-i18n="sub_rmargin">every error at its tightest — &gt;0 still assembles</small></span><span class="v" id="m-rmargin"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_teeth">loaded teeth</span><small data-i18n="sub_teeth">sharing the rated torque</small></span><span class="v" id="m-teeth"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_ostress">output-pin stress</span><small data-i18n="sub_ostress">Hertz on output pins · safety</small></span><span class="v" id="m-ostress"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_life">bearing life</span><small data-i18n="sub_life">eccentric-bearing L10 · mesh reaction only</small></span><span class="v" id="m-life"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_thermal">thermal drift</span><small data-i18n="sub_thermal">backlash at ΔT · housing↔gear CTE mismatch</small></span><span class="v" id="m-thermal"></span></div>
-        <div class="metric"><span class="k"><span data-i18n="m_eff">mesh efficiency</span><small data-i18n="sub_eff">sliding loss · fwd / backdrive · excl. bearings-seals</small></span><span class="v" id="m-eff"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_wear">sliding / wear</span><small data-i18n="sub_wear">peak slip · PV scuffing-wear index</small></span><span class="v" id="m-wear"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_preload">preload for zero backlash</span><small data-i18n="sub_preload">min interference · no-load stiffness · drag</small></span><span class="v" id="m-preload"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_minr">min flank radius</span><small data-i18n="sub_minr">tightest concave curvature vs finishing tool</small></span><span class="v" id="m-minr"></span></div>
-      </div>
+        </div>
+      </details>
     </div>
 
     <!-- tooth flank -->
@@ -888,8 +904,14 @@ const TXT = {
                   zh:'✓ 按你的加工方案,95% 的件装机背隙 ≤ {p}′,达标({g}′;最坏 {b}′)· 已载入,下方方程就绪' },
   opt_miss:     { en:'⚠ best design still gives {p}′ at the 95th percentile — {g}′ is out of reach with this plan. Shrink total error from ±{now} to ≈ ±{need} µm; the biggest lever is {src}. Loaded the closest.',
                   zh:'⚠ 按当前加工方案,最优设计做出来 95% 分位也要 {p}′,到不了 {g}′。需把总误差从 ±{now} µm 收到约 ±{need} µm——最大的改进点是{src}。已载入最接近的。' },
-  opt_hint:     { en:'Set your geometry above, then search. Click a point to load it into the sliders.',
-                  zh:'先在上方设好几何, 再搜索。点击散点即可载入到滑块。' },
+  opt_result:   { en:'✓ Optimal curve loaded · backlash {b}′ (as-built ≤{a}′) · ripple {r} µrad · efficiency {e}% — SolidWorks equation ready below ↓',
+                  zh:'✓ 最优曲线已载入 · 背隙 {b}′（装机 ≤{a}′）· 波动 {r} µrad · 效率 {e}% —— 下方 SolidWorks 方程就绪 ↓' },
+  adv_params:   { en:'Advanced (system, durability, thermal — rarely needed; sensible defaults)',
+                  zh:'高级参数（系统 / 耐久 / 热 —— 少用，已给合理默认值）' },
+  adv_metrics:  { en:'More metrics (durability, system, thermal, manufacturability)',
+                  zh:'更多指标（耐久 / 系统 / 热 / 可制造性）' },
+  opt_hint:     { en:'Set the geometry & tolerance above, then click — you get one modified curve: min backlash, smoothest backdrive, efficient.',
+                  zh:'设好上方几何与公差,点一下 —— 直接给你一条修形曲线：背隙最小、反驱最丝滑、效率最优。' },
   opt_stale:    { en:'⟳ inputs changed — re-run to update the front', zh:'⟳ 参数已改 — 重新搜索以更新前沿' },
   opt_none:     { en:'no feasible design in range — loosen the manufacturing plan or geometry', zh:'范围内无可行解 — 放宽加工方案或几何' },
   opt_lg:       { en:'non-dominated designs (backlash ↔ stiffness, colour = pressure angle)',
@@ -1380,19 +1402,18 @@ function runOptimize(){
 // ponytail: the MC runs only on the picked design (front-wide MC would cost ~2 s for little gain).
 function applyGoalPick(autoload){
   if(!OPT.front.length) return;
-  OPT.front.sort((a,b)=>a.blmax-b.blmax);
-  const goal=clampNum(+I('opt-goal').value||3, 0.5, 30);
-  const meets=OPT.front.filter(d=>d.blmax<=goal);
-  OPT.sel = meets.length ? OPT.front.indexOf(meets.reduce((a,b)=>b.stiff>a.stiff?b:a)) : 0;
-  const d=OPT.front[OPT.sel], mcP=mcYield(d.offset,d.coeffs,1200);   // verdict is one-off — buy a stable P95
-  const totNow=dwc()*1e3, need=mcP.p95>1e-9? totNow*goal/mcP.p95 : totNow;   // self-calibrated linear estimate
-  const srcs=[[t('src_prof'),ERR.prof],[t('src_pin'),ERR.pin/2],[t('src_hole'),ERR.hole],[t('src_ecc'),SENS_E*ERR.ecc]].sort((a,b)=>b[1]-a[1]);   // rank by gap effect: pin Ø→radius
-  I('opt-stat').textContent = meets.length
-    ? t('opt_hit_wc').replace('{b}',d.blmax.toFixed(2)).replace('{g}',goal)
-    : (mcP.p95<=goal
-        ? t('opt_hit_p95').replace('{p}',mcP.p95.toFixed(2)).replace('{g}',goal).replace('{b}',d.blmax.toFixed(2))
-        : t('opt_miss').replace('{p}',mcP.p95.toFixed(2)).replace('{g}',goal).replace('{now}',totNow.toFixed(0)).replace('{need}',need.toFixed(1)).replace('{src}',srcs[0][0]));
+  // THE best curve: the front is already feasible + manufacturable (GA constraints), so pick the balanced
+  // optimum — minimise backlash (primary) and wind-up ripple / smoothest backdrive (secondary). Efficiency
+  // is near-constant across the front, so it is reported, not traded.
+  const F=OPT.front, blMax=Math.max(...F.map(d=>d.backlash))||1, rpMax=Math.max(...F.map(d=>d.ripple))||1;
+  const score=d=>d.backlash/blMax + 0.5*d.ripple/rpMax;
+  OPT.sel = F.indexOf(F.reduce((a,b)=>score(b)<score(a)?b:a));
+  const d=F[OPT.sel];
   if(autoload){ state.offset=d.offset; state.coeffs=d.coeffs.slice(); afterChange(); }
+  const eta=evaluate(d.offset,d.coeffs).eta;   // efficiency is main-thread only
+  I('opt-stat').textContent = t('opt_result')
+    .replace('{b}', d.backlash.toFixed(2)).replace('{a}', d.blmax!=null?d.blmax.toFixed(1):'—')
+    .replace('{r}', d.ripple.toFixed(1)).replace('{e}', (eta*100).toFixed(1));
   showPick();
 }
 function showPick(){
@@ -1438,7 +1459,6 @@ I('optplot').addEventListener('click',e=>{ if(!OPT.pts.length) return;
   let bi=-1,bd=400; for(let i=0;i<OPT.pts.length;i++){ const dx=OPT.pts[i][0]-mx,dy=OPT.pts[i][1]-my,dd=dx*dx+dy*dy; if(dd<bd){bd=dd;bi=i;} }
   if(bi>=0){ OPT.sel=bi; drawOptPlot(); showPick(); } });
 I('opt-run').addEventListener('click',runOptimize);
-I('opt-goal').addEventListener('input',()=>{ if(OPT.front.length && !OPT.running) applyGoalPick(false); });
 
 // ============================ animation ============================
 let last=performance.now();
