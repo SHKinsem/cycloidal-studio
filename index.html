@@ -353,6 +353,7 @@
         <div class="metric"><span class="k"><span data-i18n="m_thermal">thermal drift</span><small data-i18n="sub_thermal">backlash at ΔT · housing↔gear CTE mismatch</small></span><span class="v" id="m-thermal"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_eff">mesh efficiency</span><small data-i18n="sub_eff">sliding loss · fwd / backdrive · excl. bearings-seals</small></span><span class="v" id="m-eff"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_wear">sliding / wear</span><small data-i18n="sub_wear">peak slip · PV scuffing-wear index</small></span><span class="v" id="m-wear"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_preload">preload for zero backlash</span><small data-i18n="sub_preload">min interference · no-load stiffness · drag</small></span><span class="v" id="m-preload"></span></div>
       </div>
     </div>
 
@@ -606,6 +607,37 @@ function thermalDrift(offset,coeffs){
   Rb=Rb0; PINS=PINS0;   // restore the nominal geometry
   return {active:true, backlash:blmax*arcmin, rmargin:rmin*arcmin, jam:rmin<=0, dRb:dRel*Rb0*1e3};
 }
+// Preload / negative-clearance anti-backlash: how much interference guarantees ZERO backlash across the
+// worst-case error stack + hot thermal opening, and what that preload costs. windup()'s clearance-driven
+// solve already admits negative gaps; here we (1) binary-search the min interference p that drives the
+// worst-case loose play ≤0 at every crank angle, then (2) at p report the no-load torsional stiffness —
+// BOTH flanks engage so ≈2× the loaded half-set, the stiffness that governs positioning near zero load
+// (today's deadband model reports ~0 there) — and the preload drag torque = Σ μ·F_preload·v_slide.
+function preloadReport(offset,coeffs){
+  const arcmin=180/Math.PI*60, DW=dwc();
+  const thOpen=Math.max(0,(CTE_H-CTE_D)*DELTA_T*Rb);   // hot thermal opening [mm] (cold tightens, needs no preload)
+  const open=DW+thOpen;                                // worst-case clearance opening the preload must overcome
+  const prof=profile(offset,coeffs,4000), MS=[];
+  for(let i=0;i<24;i++){ const psi=2*Math.PI/N*i/24; MS.push({m:meshState(prof,psi),psi}); }
+  const worstPlay=p=>{ let w=-Infinity;
+    for(const {m} of MS){ const [lo,hi]=playRange(m.gaps.map(x=>x+open-p),m.arms); if(hi-lo>w)w=hi-lo; }
+    return w; };
+  let lo=0,hi=0.5;                                      // cap 0.5 mm interference
+  for(let it=0;it<40;it++){ const mid=0.5*(lo+hi); if(worstPlay(mid)<=1e-9) hi=mid; else lo=mid; }
+  const pmin=hi;
+  let kmin=Infinity, drag=0;                            // no-load stiffness + drag at the nominal build preloaded by pmin
+  for(const {m,psi} of MS){
+    const Vcx=E*Math.sin(psi), Vcy=-E*Math.cos(psi); let k=0, td=0;
+    for(let j=0;j<Np;j++){ const g=m.gaps[j]-pmin; if(g>=0) continue;
+      k+=K_CONTACT*m.arms[j]**2;
+      const rcx=m.cpx[j]-m.cx, rcy=m.cpy[j]-m.cy;
+      const vs=Math.abs((Vcx+rcy/N)*(-m.cny[j])+(Vcy-rcx/N)*m.cnx[j]);
+      td+=MU_MESH*K_CONTACT*(-g)*vs;
+    }
+    if(k<kmin)kmin=k; if(td>drag)drag=td;
+  }
+  return { pmin:pmin*1e3, kNoLoad:(isFinite(kmin)?kmin:0)/1e3/arcmin, drag:drag/1000, thOpen:thOpen*1e3 };
+}
 // Monte-Carlo as-built prediction: sample every manufacturing-error source over its ± band, rebuild
 // the gap field, and read off the backlash distribution + jam risk of the units you'd actually make.
 // Eccentricity error = the disk was CUT for the nominal E but the shaft throw came out E±e, so only
@@ -764,6 +796,8 @@ const TXT = {
   m_wear:       { en:'sliding / wear', zh:'滑动 / 磨损' },
   sub_wear:     { en:'peak slip · PV scuffing-wear index', zh:'峰值滑动 · PV 胶合磨损指标' },
   nonbd:        { en:'non-backdrive', zh:'不可逆' },
+  m_preload:    { en:'preload for zero backlash', zh:'零背隙预紧' },
+  sub_preload:  { en:'min interference · no-load stiffness k₀ · drag', zh:'最小过盈 · 空载刚度 k₀ · 拖曳扭矩' },
   tooth_h:      { en:'Tooth flank', zh:'齿面' },
   tooth_aux:    { en:'one tooth · modification', zh:'单齿 · 修型' },
   lg_unmod:     { en:'unmodified (pure conjugate)', zh:'未修型（纯共轭）' },
@@ -980,6 +1014,8 @@ function updateMetrics(){
                     th.active&&th.jam?'bad':(th.active&&th.rmargin<0.5?'warn':''));
   set('m-eff',      `${fmt(r.eta*100,1)}<u>% · back ${r.etaBd>0?fmt(r.etaBd*100,0)+'%':t('nonbd')}</u>`);
   set('m-wear',     `${fmt(r.vsMax,2)}<u> mm/rad · PV ${fmt(r.pvMax,0)}</u>`);
+  const pl=preloadReport(state.offset,state.coeffs);
+  set('m-preload',  `≥${fmt(pl.pmin,0)}<u>µm → k₀ ${fmt(pl.kNoLoad,0)} · drag ${fmt(pl.drag,2)}N·m</u>`);
   I('jam').classList.toggle('on', r.rmargin<=0);
   // error budget: each source's worst-case backlash adder, biggest first → tells you what to tighten
   const names=[t('src_prof'),t('src_pin'),t('src_hole'),t('src_ecc')];
