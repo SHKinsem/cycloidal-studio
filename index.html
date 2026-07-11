@@ -660,10 +660,11 @@ function preloadReport(offset,coeffs){
 // Also refreshes the global SENS_E for the worst-case math.
 // ponytail: pin diameter is common-mode (one batch); hole position and flank error are independent
 // per pin, hole error taken fully along the contact normal (worst orientation, mildly conservative).
-function mcYield(offset,coeffs,nSamp){
-  if(offset===undefined){ offset=state.offset; coeffs=state.coeffs; }
-  nSamp=nSamp||400;
-  const nc=12, nPts=2000, h=0.002, arcmin=180/Math.PI*60, E0=E;
+// mulberry32 PRNG — deterministic draws so the shut-off's per-source deltas use COMMON random numbers.
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+// Base gap field + per-pin ∂gap/∂E; also refreshes the global SENS_E used by the worst-case math.
+function mcBuildBase(offset,coeffs){
+  const nc=12, nPts=2000, h=0.002, E0=E;
   const base=[], gp=[], gm=[], sens=[]; let sMax=0;
   const p0=profile(offset,coeffs,nPts);
   try{
@@ -674,22 +675,44 @@ function mcYield(offset,coeffs,nSamp){
   for(let c=0;c<nc;c++) sens.push(base[c].gaps.map((g,j)=>{
     const s=(gp[c][j]-gm[c][j])/(2*h); if(Math.abs(s)>sMax)sMax=Math.abs(s); return s; }));
   SENS_E=Math.min(5,Math.max(0.2,sMax));   // clamp against finite-diff noise; typically ~1–2
-  const ep=ERR.prof/1e3, en=ERR.pin/2e3, eh=ERR.hole/1e3, ee=ERR.ecc/1e3;   // en: pin Ø-band → radial gap
+  return {base, sens, nc};
+}
+// Draw nSamp as-built units. mult=[prof,pin,hole,ecc] scales each source's band (0 ⇒ that source off).
+// seed=null ⇒ Math.random; a number seeds a deterministic PRNG for common-random-number comparisons.
+function mcSample(B, nSamp, mult, seed){
+  const arcmin=180/Math.PI*60, rng = seed==null? Math.random : mulberry32(seed);
+  const ep=ERR.prof/1e3*mult[0], en=ERR.pin/2e3*mult[1], eh=ERR.hole/1e3*mult[2], ee=ERR.ecc/1e3*mult[3];   // en: pin Ø-band → radius
   const bl=[]; let nj=0;
   for(let s=0;s<nSamp;s++){
-    const dpin=(2*Math.random()-1)*en, dE=(2*Math.random()-1)*ee;
-    const uh=[]; for(let j=0;j<Np;j++) uh.push((2*Math.random()-1)*eh);
+    const dpin=(2*rng()-1)*en, dE=(2*rng()-1)*ee;
+    const uh=[]; for(let j=0;j<Np;j++) uh.push((2*rng()-1)*eh);
     let wide=0, tight=Infinity;
-    for(let c=0;c<nc;c++){
-      const g0=base[c].gaps, sc=sens[c], g2=new Array(g0.length);
-      for(let j=0;j<g0.length;j++) g2[j]=g0[j]-dpin+uh[j]+(2*Math.random()-1)*ep+sc[j]*dE;
-      const pr=playRange(g2,base[c].arms), wd=pr[1]-pr[0];
+    for(let c=0;c<B.nc;c++){
+      const g0=B.base[c].gaps, sc=B.sens[c], g2=new Array(g0.length);
+      for(let j=0;j<g0.length;j++) g2[j]=g0[j]-dpin+uh[j]+(2*rng()-1)*ep+sc[j]*dE;
+      const pr=playRange(g2,B.base[c].arms), wd=pr[1]-pr[0];
       if(wd>wide)wide=wd; if(wd<tight)tight=wd;
     }
     bl.push(wide*arcmin); if(!(tight>0)) nj++;
   }
   bl.sort((a,b)=>a-b);
   return { p50:bl[Math.floor(nSamp*0.5)], p95:bl[Math.floor(nSamp*0.95)], jam:nj/nSamp };
+}
+function mcYield(offset,coeffs,nSamp){
+  if(offset===undefined){ offset=state.offset; coeffs=state.coeffs; }
+  return mcSample(mcBuildBase(offset,coeffs), nSamp||400, [1,1,1,1], null);
+}
+// Shut-off tolerance sensitivity: which source actually drives the as-built backlash spread? Re-sample the
+// SAME Monte-Carlo (common random numbers via a fixed seed) with each source's band zeroed; the p95 drop
+// when a source is removed is its total-effect contribution. Correctly separates the common-mode pin-diameter
+// batch from the per-unit-independent hole error the coherent worst-case budget over-ranks. Deterministic
+// (fixed seed) so the panel ranking doesn't flicker across keystrokes. Returns the full distribution too.
+function sobolShutoff(offset,coeffs,nSamp){
+  if(offset===undefined){ offset=state.offset; coeffs=state.coeffs; }
+  nSamp=nSamp||700; const B=mcBuildBase(offset,coeffs), seed=0x9E3779B9|0;
+  const full=mcSample(B,nSamp,[1,1,1,1],seed), drops=[];
+  for(let s=0;s<4;s++){ const m=[1,1,1,1]; m[s]=0; drops.push(Math.max(0,full.p95-mcSample(B,nSamp,m,seed).p95)); }
+  return { p50:full.p50, p95:full.p95, jam:full.jam, drops };
 }
 // pick rotation sign by conjugacy of the unmodified tooth (mirrors Python self-check);
 // also reports worst residual clearance so we can flag an invalid (undercut) geometry.
@@ -743,8 +766,8 @@ const TXT = {
   src_pin:      { en:'pins', zh:'针销' },
   src_hole:     { en:'holes', zh:'销孔' },
   src_ecc:      { en:'eccentric', zh:'偏心' },
-  bud_lead:     { en:'worst-case build: total error ±{d} µm → backlash up to {b}′ · who contributes what:',
-                  zh:'最坏情况:总误差 ±{d} µm → 装机背隙最高 {b}′ · 各来源贡献:' },
+  bud_lead:     { en:'as-built P95 backlash {p}′ · what drives the spread (remove ⇒ −′) — tighten the top one:',
+                  zh:'装机 95分位背隙 {p}′ · 谁主导离散（移除 ⇒ −′）—— 优先收紧最上面那个:' },
   bud_hint:     { en:'· tighten {s} first', zh:'· 先收紧:{s}' },
   lbl_thick:    { en:'disk width', zh:'摆线盘厚度' },
   lbl_cbear:    { en:'bearing clr.', zh:'轴承游隙' },
@@ -1005,7 +1028,7 @@ function lifeStr(r){   // eccentric-bearing L10: revolutions (speed-free) unless
   const m=rev/1e6; return `${m>=1000? fmt(m/1000,1)+'×10⁹' : fmt(m,0)+'×10⁶'}<u> rev</u>`;
 }
 function updateMetrics(){
-  const mc=mcYield();   // first: also refreshes SENS_E so the worst-case numbers below use it
+  const mc=sobolShutoff();   // full MC distribution + per-source shut-off ranking; also refreshes SENS_E
   const r=evaluate(state.offset,state.coeffs);
   const set=(id,html,cls)=>{ const el=I(id); el.innerHTML=html; el.className='v'+(cls?' '+cls:''); };
   set('m-backlash', `${fmt(r.backlash)}<u>′</u> ${deltaTag(r.backlash,BASE&&BASE.backlash,'low')}`);
@@ -1033,14 +1056,17 @@ function updateMetrics(){
   const pl=preloadReport(state.offset,state.coeffs);
   set('m-preload',  `≥${fmt(pl.pmin,0)}<u>µm → k₀ ${fmt(pl.kNoLoad,0)} · drag ${fmt(pl.drag,2)}N·m</u>`);
   I('jam').classList.toggle('on', r.rmargin<=0);
-  // error budget: each source's worst-case backlash adder, biggest first → tells you what to tighten
+  // error budget: each source's TRUE p95 contribution (shut-off = re-sample with that source removed),
+  // biggest first → tells you which tolerance to tighten. Correctly de-ranks the per-unit-independent hole
+  // error that the old coherent worst-case lever over-weighted.
   const names=[t('src_prof'),t('src_pin'),t('src_hole'),t('src_ecc')];
   const vals=[ERR.prof,ERR.pin,ERR.hole,ERR.ecc];
-  const order=[0,1,2,3].sort((a,b)=>r.budget[b]-r.budget[a]);
-  const bmax=Math.max(0.01,...r.budget);
+  const drops=mc.drops;
+  const order=[0,1,2,3].sort((a,b)=>drops[b]-drops[a]);
+  const dmax=Math.max(0.01,...drops);
   I('budget').innerHTML =
-    `<b>${t('bud_lead').replace('{d}',(dwc()*1e3).toFixed(0)).replace('{b}',r.blmax.toFixed(1))}</b><br>`+
-    order.map(i=>`<span class="src"><i class="bar" style="width:${Math.max(3,42*r.budget[i]/bmax)|0}px"></i>${names[i]} ±${vals[i]}µm → +${r.budget[i].toFixed(1)}′</span>`).join('')+
+    `<b>${t('bud_lead').replace('{p}',mc.p95.toFixed(1))}</b><br>`+
+    order.map(i=>`<span class="src"><i class="bar" style="width:${Math.max(3,42*drops[i]/dmax)|0}px"></i>${names[i]} ±${vals[i]}µm → ${drops[i]>=0.05?'−'+drops[i].toFixed(1)+'′':'~0'}</span>`).join('')+
     ` <span class="hint">${t('bud_hint').replace('{s}',names[order[0]])}</span>`;
 }
 
