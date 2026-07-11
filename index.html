@@ -244,6 +244,7 @@
       <div class="field"><label><span data-i18n="lbl_cteh">housing CTE</span> <span class="unit">µm/m·K</span></label><input id="g-cteh" type="number" value="23" min="0" max="50" step="0.5"></div>
       <div class="field"><label><span data-i18n="lbl_cted">gear CTE</span> <span class="unit">µm/m·K</span></label><input id="g-cted" type="number" value="11.5" min="0" max="50" step="0.5"></div>
       <div class="field"><label><span data-i18n="lbl_mu">friction µ</span></label><input id="g-mu" type="number" value="0.06" min="0.01" max="0.2" step="0.01"></div>
+      <div class="field"><label><span data-i18n="lbl_ndisc">discs (phased)</span></label><input id="g-ndisc" type="number" value="1" min="1" max="3" step="1"></div>
     </div>
     <div class="mfg">
       <h3 data-i18n="mfg_h">Manufacturing plan — pick how each part is made; the ±µm numbers are editable if you know your shop better</h3>
@@ -435,6 +436,7 @@ let OUT={k:Infinity,bl:0,sigma:0,safety:Infinity,neng:0};   // output-stage resu
 // transform (angular backlash invariant). DELTA_T = operating rise [°C]; CTE_H/CTE_D = housing/disc CTE [1/K].
 let DELTA_T=0.0, CTE_H=23.0e-6, CTE_D=11.5e-6;
 let MU_MESH=0.06;   // boundary/EP-grease friction coeff at pin contacts → mesh efficiency + PV wear index (sliding loss only, excl. bearings/seals)
+let N_DISC=1;       // number of phased cycloid discs (1/2/3) — phased superposition cancels TE-ripple harmonics not a multiple of N_DISC
 const K_CONTACT=5.0e4;
 const ESTAR=115385.0, SH_LIM=1500.0;   // steel-steel Hertz E* [MPa] (1/E*=2(1-0.3²)/210000); contact-fatigue limit [MPa]
 let ROT_SIGN=-1.0, GEOM_WORST=0;
@@ -540,6 +542,19 @@ function rebuildOutStage(){
   }
   OUT={ k:kmin/1e3/arcmin, bl:blmax, sigma:smax, safety:(smax>1e-9?SH_LIM/smax:Infinity), neng:nmin };
 }
+// n-disc phased superposition of the loaded wind-up waveform: disc k is offset by k/nd of a crank rev, so
+// the net output TE cancels every ripple harmonic whose order is NOT a multiple of nd (2 discs kill the odd
+// orders incl. the dominant fundamental; 3 discs kill non-multiples-of-3). Interpolated → any sample count.
+function phasedPtp(bs, nd){
+  const ns=bs.length; let mn=Infinity, mx=-Infinity;
+  if(nd<=1){ for(const v of bs){ if(v<mn)mn=v; if(v>mx)mx=v; } return mx-mn; }
+  for(let i=0;i<ns;i++){ let s=0;
+    for(let k=0;k<nd;k++){ const x=i+ns*k/nd, i0=Math.floor(x)%ns, f=x-Math.floor(x);
+      s+=bs[i0]*(1-f)+bs[(i0+1)%ns]*f; }
+    s/=nd; if(s<mn)mn=s; if(s>mx)mx=s;
+  }
+  return mx-mn;
+}
 function evaluate(offset,coeffs,nPts,variant){
   nPts=nPts||8000;   // match Python NTH so the nearest-point search agrees to the displayed digit
   const prof=profile(offset,coeffs,nPts,variant), arcmin=180/Math.PI*60;
@@ -584,7 +599,7 @@ function evaluate(offset,coeffs,nPts,variant){
   return { backlash, blmax:Math.max(...blmaxs)*arcmin,
            budget:bud.map(v=>Math.max(0,v*arcmin-backlash)),   // each source's worst-case backlash adder [′]
            stiff, stiffMesh:kmesh,
-           ripple:(Math.max(...bs)-Math.min(...bs))*1e6,
+           ripple:phasedPtp(bs,N_DISC)*1e6,
            rmargin:Math.min(...rmargins)*arcmin, n_eng:Math.min(...nes),
            sigmaH:sigMax, safety:(sigMax>1e-9?SH_LIM/sigMax:Infinity), sysLM,
            outSigma:OUT.sigma, outSafety:OUT.safety, outNeng:OUT.neng, outBL:OUT.bl*arcmin, L10rev, Peq,
@@ -743,6 +758,7 @@ const TXT = {
   lbl_cteh:     { en:'housing CTE', zh:'壳体热膨胀' },
   lbl_cted:     { en:'gear CTE', zh:'摆线盘热膨胀' },
   lbl_mu:       { en:'friction µ', zh:'摩擦系数 µ' },
+  lbl_ndisc:    { en:'discs (phased)', zh:'摆线盘数(相位)' },
   warn:         { en:"Geometry undercuts — the unmodified tooth can't mesh with all pins. Reduce E or increase Rb.",
                   zh:'几何根切 —— 未修型齿廓无法与全部针齿共轭啮合。请减小 E 或增大 Rb。' },
   mesh_h:       { en:'Mesh', zh:'啮合' },
@@ -1002,7 +1018,7 @@ function updateMetrics(){
   const sfstate = r.safety<1?'bad':(r.safety<1.2?'warn':'');
   const sfcue = sfstate==='bad'?` <u>${t('overload')}</u>` : sfstate==='warn'?` <u>${t('tight')}</u>` : '';
   set('m-safety',   `${fmt(r.safety,2)}<u>×</u>${sfcue}`, sfstate);
-  set('m-ripple',   `${fmt(r.ripple,1)}<u>µrad</u> ${deltaTag(r.ripple,BASE&&BASE.ripple,'ripple')}`);
+  set('m-ripple',   `${fmt(r.ripple,1)}<u>µrad${N_DISC>1?` · ${N_DISC}-disc`:''}</u> ${deltaTag(r.ripple,BASE&&BASE.ripple,'ripple')}`);
   const rstate = r.rmargin<=0?'bad':(r.rmargin<0.5?'warn':'');
   const rcue = rstate==='bad'?` <u>${t('jamword')}</u>` : rstate==='warn'?` <u>${t('tight')}</u>` : '';
   set('m-rmargin',  `${fmt(Math.max(r.rmargin,-99))}<u>′</u>${rcue}`, rstate);   // deep interference: the cue matters, not the number
@@ -1105,6 +1121,7 @@ function readSpec(){   // durability / lost-motion spec — affects metrics only
   CTE_H  =clampNum(+I('g-cteh').value||23, 0, 50)/1e6;
   CTE_D  =clampNum(+I('g-cted').value||11.5, 0, 50)/1e6;
   MU_MESH=clampNum(+I('g-mu').value||0.06, 0.01, 0.2);
+  N_DISC =Math.round(clampNum(+I('g-ndisc').value||1, 1, 3));
   rebuildOutStage();   // output stage depends only on geometry/spec — recompute here, cache in OUT
 }
 function readErr(){   // manufacturing plan → per-source half-bands [µm]
@@ -1133,7 +1150,7 @@ document.querySelectorAll('.presets button').forEach(b=>b.addEventListener('clic
 I('s-offset').addEventListener('input',e=>{ state.offset=clampNum(+e.target.value/1e3,-0.1,-0.015); afterChange(); });
 for(let k=1;k<=NK;k++){ I('s-c'+k).addEventListener('input',e=>{ state.coeffs[k-1]=+e.target.value/1e3; afterChange(); }); }
 ['g-Rb','g-Rr','g-E','g-N','g-T'].forEach(id=>I(id).addEventListener('input',applyGeometry));
-['g-thick','g-cbear','g-cout','g-rw','g-zw','g-rwp','g-cbrg','g-nin','g-dt','g-cteh','g-cted','g-mu'].forEach(id=>I(id).addEventListener('input',()=>{ readSpec(); scheduleMetrics(); }));
+['g-thick','g-cbear','g-cout','g-rw','g-zw','g-rwp','g-cbrg','g-nin','g-dt','g-cteh','g-cted','g-mu','g-ndisc'].forEach(id=>I(id).addEventListener('input',()=>{ readSpec(); scheduleMetrics(); }));
 // process picker fills the µm field; editing the field flips the picker to "custom"
 [['p-prof','e-prof'],['p-pin','e-pin'],['p-hole','e-hole'],['p-ecc','e-ecc']].forEach(([ps,es])=>{
   I(ps).addEventListener('change',()=>{ const v=I(ps).value; if(v!=='c') I(es).value=v; errChanged(); });
@@ -1157,7 +1174,11 @@ function invalidateOpt(){ if(!OPT.ran) return; stopWorker(); OPT.running=false; 
 
 // Worker source: physics (K-harmonic) + a proper NSGA-II. Self-contained (Blob) so it works offline / on Pages.
 const WORKER_SRC = `
-var Rb,Rr,E,N,M,Np,DWC,T_RATED,K_CONTACT,ROT,PINS,NK,OUT_K;
+var Rb,Rr,E,N,M,Np,DWC,T_RATED,K_CONTACT,ROT,PINS,NK,OUT_K,N_DISC;
+function phasedPtp(bs,nd){ var ns=bs.length,mn=Infinity,mx=-Infinity,i,k;
+  if(nd<=1){ for(i=0;i<ns;i++){ if(bs[i]<mn)mn=bs[i]; if(bs[i]>mx)mx=bs[i]; } return mx-mn; }
+  for(i=0;i<ns;i++){ var s=0; for(k=0;k<nd;k++){ var x=i+ns*k/nd, i0=Math.floor(x)%ns, f=x-Math.floor(x); s+=bs[i0]*(1-f)+bs[(i0+1)%ns]*f; } s/=nd; if(s<mn)mn=s; if(s>mx)mx=s; }
+  return mx-mn; }
 function profile(offset,coeffs,nPts){
   var X=new Float64Array(nPts),Y=new Float64Array(nPts),TH=new Float64Array(nPts);
   for(var i=0;i<nPts;i++){ var th=2*Math.PI*i/nPts;
@@ -1214,7 +1235,7 @@ function evalFast(offset,coeffs){
   var ksys=(OUT_K>0&&isFinite(OUT_K))? 1/(1/kmesh+1/OUT_K) : kmesh;   // series with output pin-hole stage (matches main panel)
   return { backlash:Math.max.apply(null,plays)*arcmin, blmax:Math.max.apply(null,blmaxs)*arcmin,
            stiff:ksys,
-           ripple:(Math.max.apply(null,bs)-Math.min.apply(null,bs))*1e6,
+           ripple:phasedPtp(bs,N_DISC)*1e6,
            rmargin:Math.min.apply(null,rmargins)*arcmin, n_eng:Math.min.apply(null,nes), maxPA:paMax, sigmaH:sigMax };
 }
 var LO=[-0.10,-0.04,-0.04,-0.04,-0.04], HI=[-0.015,0.04,0.04,0.04,0.04], D=5, POP=48, GEN=44, SEEDS=[];
@@ -1267,7 +1288,7 @@ function run(){
   }
   postMessage({type:'done', pct:100, front:frontOut(pop)});
 }
-onmessage=function(e){ var g=e.data; Rb=g.Rb;Rr=g.Rr;E=g.E;N=g.N;M=g.M;Np=g.Np;DWC=g.DWC||0;T_RATED=g.T_RATED;K_CONTACT=g.K_CONTACT;ROT=g.ROT;PINS=g.PINS;NK=g.NK;OUT_K=g.OUT_K;SEEDS=g.SEEDS||[];L_TOOTH=g.L_TOOTH||10;ESTAR=g.ESTAR||115385; run(); };
+onmessage=function(e){ var g=e.data; Rb=g.Rb;Rr=g.Rr;E=g.E;N=g.N;M=g.M;Np=g.Np;DWC=g.DWC||0;T_RATED=g.T_RATED;K_CONTACT=g.K_CONTACT;ROT=g.ROT;PINS=g.PINS;NK=g.NK;OUT_K=g.OUT_K;N_DISC=g.N_DISC||1;SEEDS=g.SEEDS||[];L_TOOTH=g.L_TOOTH||10;ESTAR=g.ESTAR||115385; run(); };
 `;
 
 function runOptimize(){
@@ -1292,7 +1313,7 @@ function runOptimize(){
   for(const p of Object.values(PRESETS)) SEEDS.push([p.offset].concat(p.coeffs));
   SEEDS.push([state.offset].concat(state.coeffs.slice(0,NK)));
   for(let off=-0.017; off>=-0.098; off-=0.006){ SEEDS.push([off,-0.0012,-0.0037,0,0]); SEEDS.push([off,0,0,0,0]); }
-  wk.postMessage({ Rb,Rr,E,N,M,Np,DWC:dwc(),T_RATED,K_CONTACT,ROT:ROT_SIGN, PINS, NK, OUT_K:OUT.k, SEEDS, L_TOOTH, ESTAR });
+  wk.postMessage({ Rb,Rr,E,N,M,Np,DWC:dwc(),T_RATED,K_CONTACT,ROT:ROT_SIGN, PINS, NK, OUT_K:OUT.k, N_DISC, SEEDS, L_TOOTH, ESTAR });
 }
 // goal-driven, judged on the AS-BUILT backlash: tier 1 = worst-case bound meets the target, tier 2 =
 // 95% Monte-Carlo yield meets it, else miss with a self-calibrated "shrink to ±X µm, start with Y"
