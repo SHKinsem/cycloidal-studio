@@ -55,6 +55,9 @@ const TXT = {
   lbl_mu:       { en:'friction µ', zh:'摩擦系数 µ' },
   lbl_ndisc:    { en:'discs (phased)', zh:'摆线盘数(相位)' },
   lbl_rtool:    { en:'tool radius', zh:'刀具半径' },
+  lbl_adje:     { en:'adjustable ecc', zh:'可调偏心' },
+  adje_unit:    { en:'matched assy', zh:'配对装配' },
+  adje_on:      { en:'· dial E per unit', zh:'· 每台调E' },
   warn:         { en:"Geometry undercuts — the unmodified tooth can't mesh with all pins. Reduce E or increase Rb.",
                   zh:'几何根切 —— 未修型齿廓无法与全部针齿共轭啮合。请减小 E 或增大 Rb。' },
   mesh_h:       { en:'Mesh', zh:'啮合' },
@@ -313,14 +316,15 @@ function lifeStr(r){   // eccentric-bearing L10: revolutions (speed-free) unless
   const m=rev/1e6; return `${m>=1000? fmt(m/1000,1)+'×10⁹' : fmt(m,0)+'×10⁶'}<u> rev</u>`;
 }
 function updateMetrics(){
-  const {Np,ERR,R_TOOL,DELTA_T,N_DISC}=getState();
+  const {Np,ERR,R_TOOL,DELTA_T,N_DISC,A_ADJ}=getState();
   const mc=sobolShutoff(state.offset,state.coeffs);   // full MC distribution + per-source shut-off ranking; also refreshes SENS_E
   const r=evaluate(state.offset,state.coeffs);
   const set=(id,html,cls)=>{ const el=I(id); el.innerHTML=html; el.className='v'+(cls?' '+cls:''); };
   set('m-backlash', `${fmt(r.backlash)}<u>′</u> ${deltaTag(r.backlash,BASE&&BASE.backlash,'low')}`);
   const jstate = mc.jam>0.05?'bad':(mc.jam>0?'warn':'');
   const jcue = mc.jam>0? ` <u>${(mc.jam*100).toFixed(0)}${t('mc_jam')}</u>`:'';
-  set('m-asbuilt',  mc.jam>=0.5? `—${jcue}` : `${fmt(mc.p50,1)}–${fmt(mc.p95,1)}<u>′</u>${jcue}`, jstate);
+  const adjTag = A_ADJ? ` <u>${t('adje_on')}</u>` : '';
+  set('m-asbuilt',  mc.jam>=0.5? `—${jcue}${adjTag}` : `${fmt(mc.p50,1)}–${fmt(mc.p95,1)}<u>′</u>${jcue}${adjTag}`, jstate);
   set('m-syslm',    `${fmt(r.sysLM)}<u>′</u>`);
   set('m-stiff',    `${fmt(r.stiff,1)}<u>N·m/′</u> ${deltaTag(r.stiff,BASE&&BASE.stiff,'high')}`);
   set('m-stress',   `${fmt(r.sigmaH,0)}<u>MPa</u>`);
@@ -442,6 +446,7 @@ function readSpec(){   // durability / lost-motion spec — affects metrics only
     MU_MESH:clampNum(+I('g-mu').value||0.06, 0.01, 0.2),
     N_DISC :Math.round(clampNum(+I('g-ndisc').value||1, 1, 3)),
     R_TOOL :clampNum(+I('g-rtool').value||0.1, 0.02, 5),
+    A_ADJ  :I('g-adje').checked,
   });
   rebuildOutStage();   // output stage depends only on geometry/spec — recompute here, cache in OUT
 }
@@ -473,7 +478,8 @@ document.querySelectorAll('.presets button').forEach(b=>b.addEventListener('clic
 I('s-offset').addEventListener('input',e=>{ state.offset=clampNum(+e.target.value/1e3,-0.12,0.04); afterChange(); });   // negative = clearance (backlash); ≥0 = interference/preload (metrics flag jam)
 for(let k=1;k<=NK;k++){ I('s-c'+k).addEventListener('input',e=>{ state.coeffs[k-1]=+e.target.value/1e3; afterChange(); }); }
 ['g-Rb','g-Rr','g-E','g-N','g-T'].forEach(id=>I(id).addEventListener('input',applyGeometry));
-['g-thick','g-cbear','g-cout','g-rw','g-zw','g-rwp','g-cbrg','g-nin','g-dt','g-cteh','g-cted','g-mu','g-ndisc','g-rtool'].forEach(id=>I(id).addEventListener('input',()=>{ readSpec(); scheduleMetrics(); }));
+['g-thick','g-cbear','g-cout','g-rw','g-zw','g-rwp','g-cbrg','g-nin','g-dt','g-cteh','g-cted','g-mu','g-ndisc','g-rtool','g-adje'].forEach(id=>I(id).addEventListener('input',()=>{ readSpec(); scheduleMetrics(); }));
+I('g-adje').addEventListener('change',()=>{ readSpec(); scheduleMetrics(); });   // checkbox: 'change' is the reliable toggle event
 // process picker fills the µm field; editing the field flips the picker to "custom"
 const TOOLR={'2':0.3,'4':0.1,'12':0.15,'15':1.0,'60':0.4};   // profile process → finishing tool radius [mm]
 [['p-prof','e-prof'],['p-pin','e-pin'],['p-hole','e-hole'],['p-ecc','e-ecc']].forEach(([ps,es])=>{

@@ -16,6 +16,7 @@ let DELTA_T=0.0, CTE_H=23.0e-6, CTE_D=11.5e-6;
 let MU_MESH=0.06;   // boundary/EP-grease friction coeff at pin contacts → mesh efficiency + PV wear index (sliding loss only, excl. bearings/seals)
 let N_DISC=1;       // number of phased cycloid discs (1/2/3) — phased superposition cancels TE-ripple harmonics not a multiple of N_DISC
 let R_TOOL=0.1;     // finishing tool radius [mm] (wire-EDM wire ~0.1, form-grinding wheel 0.5–3) — min concave flank radius must exceed it
+let A_ADJ=false;    // adjustable eccentric / matched assembly: dial E per unit at assembly to null backlash (removes nominal clearance + common-mode + ecc error; residual = per-pin independent + crank non-uniformity)
 const K_CONTACT=5.0e4;
 const ESTAR=115385.0, SH_LIM=1500.0;   // steel-steel Hertz E* [MPa] (1/E*=2(1-0.3²)/210000); contact-fatigue limit [MPa]
 let ROT_SIGN=-1.0, GEOM_WORST=0;
@@ -273,19 +274,37 @@ function mcBuildBase(offset,coeffs){
 // seed=null ⇒ Math.random; a number seeds a deterministic PRNG for common-random-number comparisons.
 function mcSample(B, nSamp, mult, seed){
   const arcmin=180/Math.PI*60, rng = seed==null? Math.random : mulberry32(seed);
-  const ep=ERR.prof/1e3*mult[0], en=ERR.pin/2e3*mult[1], eh=ERR.hole/1e3*mult[2], ee=ERR.ecc/1e3*mult[3];   // en: pin Ø-band → radius
+  const ep=ERR.prof/1e3*mult[0], en=ERR.pin/2e3*mult[1], eh=ERR.hole/1e3*mult[2];   // en: pin Ø-band → radius
+  const ee = A_ADJ ? 0 : ERR.ecc/1e3*mult[3];   // adjustable eccentric absorbs the eccentricity error (and any common-mode shift)
   const bl=[]; let nj=0;
   for(let s=0;s<nSamp;s++){
     const dpin=(2*rng()-1)*en, dE=(2*rng()-1)*ee;
     const uh=[]; for(let j=0;j<Np;j++) uh.push((2*rng()-1)*eh);
-    let wide=0, tight=Infinity;
-    for(let c=0;c<B.nc;c++){
-      const g0=B.base[c].gaps, sc=B.sens[c], g2=new Array(g0.length);
+    const G=[]; for(let c=0;c<B.nc;c++){ const g0=B.base[c].gaps, sc=B.sens[c], g2=new Array(g0.length);
       for(let j=0;j<g0.length;j++) g2[j]=g0[j]-dpin+uh[j]+(2*rng()-1)*ep+sc[j]*dE;
-      const pr=playRange(g2,B.base[c].arms), wd=pr[1]-pr[0];
-      if(wd>wide)wide=wd; if(wd<tight)tight=wd;
+      G.push(g2); }
+    if(A_ADJ){
+      // matched assembly: dial ONE eccentricity offset per unit to minimise backlash. Backlash falls
+      // monotonically as we tighten from the nominal (Es=0) toward the mean-null centre, until the first
+      // crank/pin jams — so the residual is the max-over-crank play at the TIGHTEST feasible setting. Found by
+      // bisection on the jam boundary (wmin=0). ev() inlines playRange over the linearised ∂gap/∂E field.
+      let gs=0, ss=0; for(let c=0;c<B.nc;c++){ const g=G[c], sc=B.sens[c]; for(let j=0;j<g.length;j++){ gs+=g[j]; ss+=sc[j]; } }
+      let Ec = ss!==0? -gs/ss : 0; Ec=Math.max(-0.15,Math.min(0.15,Ec));   // realistic eccentric-adjust range
+      const ev=(Es)=>{ let wmax=-Infinity, wmin=Infinity;
+        for(let c=0;c<B.nc;c++){ const g=G[c], sc=B.sens[c], arm=B.base[c].arms; let hi=Infinity, lo=-Infinity;
+          for(let j=0;j<g.length;j++){ const gg=g[j]+sc[j]*Es, aa=arm[j];
+            if(aa>1e-9){ const r=gg/aa; if(r<hi)hi=r; } else if(aa<-1e-9){ const r=gg/aa; if(r>lo)lo=r; } }
+          const wd=hi-lo; if(wd>wmax)wmax=wd; if(wd<wmin)wmin=wd; }
+        return {wmax,wmin}; };
+      const rb=ev(Ec); let res;
+      if(rb.wmin>=-1e-9){ res=rb.wmax; }                                     // whole adjust range assembles → tightest = Ec
+      else { let a=0,b=Ec; for(let it=0;it<12;it++){ const m=0.5*(a+b); if(ev(m).wmin>=-1e-9) a=m; else b=m; } res=ev(a).wmax; }
+      bl.push(Math.max(0,res)*arcmin);
+    } else {
+      let wide=0, tight=Infinity;
+      for(let c=0;c<B.nc;c++){ const pr=playRange(G[c],B.base[c].arms), wd=pr[1]-pr[0]; if(wd>wide)wide=wd; if(wd<tight)tight=wd; }
+      bl.push(wide*arcmin); if(!(tight>0)) nj++;
     }
-    bl.push(wide*arcmin); if(!(tight>0)) nj++;
   }
   bl.sort((a,b)=>a-b);
   return { p50:bl[Math.floor(nSamp*0.5)], p95:bl[Math.floor(nSamp*0.95)], jam:nj/nSamp };
@@ -299,7 +318,7 @@ function mcYield(offset,coeffs,nSamp){
 // batch from the per-unit-independent hole error the coherent worst-case budget over-ranks. Deterministic
 // (fixed seed) so the panel ranking doesn't flicker across keystrokes. Returns the full distribution too.
 function sobolShutoff(offset,coeffs,nSamp){
-  nSamp=nSamp||700; const B=mcBuildBase(offset,coeffs), seed=0x9E3779B9|0;
+  nSamp=nSamp||(A_ADJ?320:700); const B=mcBuildBase(offset,coeffs), seed=0x9E3779B9|0;   // fewer samples when the per-unit E-search runs (keeps the live MC snappy)
   const full=mcSample(B,nSamp,[1,1,1,1],seed), drops=[];
   for(let s=0;s<4;s++){ const m=[1,1,1,1]; m[s]=0; drops.push(Math.max(0,full.p95-mcSample(B,nSamp,m,seed).p95)); }
   return { p50:full.p50, p95:full.p95, jam:full.jam, drops };
@@ -338,8 +357,9 @@ function configure(o){
   if('MU_MESH' in o) MU_MESH=o.MU_MESH;
   if('N_DISC' in o) N_DISC=o.N_DISC;
   if('R_TOOL' in o) R_TOOL=o.R_TOOL;
+  if('A_ADJ' in o) A_ADJ=o.A_ADJ;
   if('ROT_SIGN' in o) ROT_SIGN=o.ROT_SIGN;
   if('PINS' in o) PINS=o.PINS;
 }
-function getState(){ return {Rb,Rr,E,N,M,Np,T_RATED,ERR,SENS_E,L_TOOTH,C_BEAR,C_OUT,R_W,Z_W,RW_PIN,C_BRG,N_IN,OUT,DELTA_T,CTE_H,CTE_D,MU_MESH,N_DISC,R_TOOL,ROT_SIGN,GEOM_WORST,PINS,K_CONTACT,ESTAR,SH_LIM}; }
+function getState(){ return {Rb,Rr,E,N,M,Np,T_RATED,ERR,SENS_E,L_TOOTH,C_BEAR,C_OUT,R_W,Z_W,RW_PIN,C_BRG,N_IN,OUT,DELTA_T,CTE_H,CTE_D,MU_MESH,N_DISC,R_TOOL,A_ADJ,ROT_SIGN,GEOM_WORST,PINS,K_CONTACT,ESTAR,SH_LIM}; }
 export { profile, meshState, contactInvRe, hertzMaxMPa, playRange, windup, rebuildOutStage, phasedPtp, profileHealth, evaluate, mulberry32, mcBuildBase, mcSample, mcYield, sobolShutoff, thermalDrift, preloadReport, pickRotSign, rebuildPins, dwc, configure, getState };
