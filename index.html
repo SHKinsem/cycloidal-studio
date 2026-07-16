@@ -21,7 +21,7 @@
         <button id="lang-zh">中文</button>
       </div>
     </div>
-    <p class="lede" data-i18n="lede">Set your drive's geometry, shape the tooth with three modification terms, and read backlash, stiffness and tolerance margin live. Copy the SolidWorks equation when it's right.</p>
+    <p class="lede" data-i18n="lede">Set your geometry, pick how each part will be made, and the tool converts your shop's real accuracy into the backlash of the units you'd actually build. Then one click finds the tooth modification that still meets your target despite those errors.</p>
   </header>
 
   <!-- geometry & spec -->
@@ -37,7 +37,6 @@
     <details class="advset">
       <summary data-i18n="adv_params">Advanced (system, durability, thermal — rarely needed; sensible defaults)</summary>
       <div class="fields">
-      <div class="field"><label><span data-i18n="opt_target">target backlash</span> <span class="unit">′</span></label><input id="opt-goal" type="number" value="3" min="0.5" max="30" step="0.5"></div>
       <div class="field"><label><span data-i18n="lbl_thick">disk width</span> <span class="unit">mm</span></label><input id="g-thick" type="number" value="10" min="1" max="100" step="0.5"></div>
       <div class="field"><label><span data-i18n="lbl_cbear">bearing clr.</span> <span class="unit">µm</span></label><input id="g-cbear" type="number" value="0" min="0" max="100" step="1"></div>
       <div class="field"><label><span data-i18n="lbl_cout">output clr.</span> <span class="unit">µm</span></label><input id="g-cout" type="number" value="0" min="0" max="100" step="1"></div>
@@ -101,12 +100,31 @@
   </div>
 
   <div class="grid">
+    <!-- optimize (the tool's primary action — first thing after the inputs) -->
+    <div class="panel full" id="optpanel">
+      <h2><span data-i18n="opt_h">Optimize for this geometry</span> <span class="aux" data-i18n="opt_sub">one click → the optimal curve loaded into the sliders, judged on the backlash of the units you'd actually build</span></h2>
+      <div class="optbar">
+        <button id="opt-run" class="optbtn" data-i18n="opt_run">◆ Get the optimal curve</button>
+        <span class="optstat" id="opt-stat" aria-live="polite"></span>
+      </div>
+      <div class="optghost" data-i18n="opt_ghost">run once to see the design front</div>
+      <div id="optbody">
+        <div class="optgrid">
+          <canvas id="optplot"></canvas>
+          <div class="optpick" id="opt-pick"></div>
+        </div>
+        <div class="legend">
+          <span><i class="swatch" style="background:var(--green)"></i><span data-i18n="opt_lg">non-dominated designs (backlash ↔ stiffness, colour = pressure angle)</span></span>
+        </div>
+      </div>
+    </div>
+
     <!-- mesh -->
     <div class="panel">
       <h2><span data-i18n="mesh_h">Mesh</span> <span class="aux" id="ratio"></span></h2>
       <div class="stagewrap">
         <canvas id="stage"></canvas>
-        <div class="jam" id="jam" data-i18n="jam">Tolerance jam — locks under the tolerance stack</div>
+        <div class="jam" id="jam" data-i18n="jam">Worst-case jam — locks if every manufacturing error lands at its tightest</div>
       </div>
       <div class="transport">
         <button class="play" id="play" aria-pressed="true"></button>
@@ -154,21 +172,25 @@
         <div class="metric"><span class="k"><span data-i18n="m_asbuilt">as-built backlash</span><small data-i18n="sub_asbuilt">Monte-Carlo over your plan · typical–95%</small></span><span class="v" id="m-asbuilt"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_ripple">ripple</span><small data-i18n="sub_ripple">wind-up variation = smoothness</small></span><span class="v" id="m-ripple"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_eff">mesh efficiency</span><small data-i18n="sub_eff">sliding loss · mesh + output pins · fwd / backdrive</small></span><span class="v" id="m-eff"></span></div>
-        <div class="metric"><span class="k"><span data-i18n="m_stiff">stiffness</span><small data-i18n="sub_stiff">torsional, worst crank angle</small></span><span class="v" id="m-stiff"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_stiff">stiffness</span><small data-i18n="sub_stiff">system: mesh ⊕ output pin-hole (bearings excl.)</small></span><span class="v" id="m-stiff"></span></div>
       </div>
       <details class="advset">
         <summary data-i18n="adv_metrics">More metrics (durability, system, thermal, manufacturability)</summary>
         <div class="metrics">
-        <div class="metric"><span class="k"><span data-i18n="m_syslm">system lost motion</span><small data-i18n="sub_syslm">mesh + bearing + output coupling</small></span><span class="v" id="m-syslm"></span></div>
+        <div class="mgroup" data-i18n="grp_sys">system</div>
+        <div class="metric"><span class="k"><span data-i18n="m_syslm">system lost motion</span><small data-i18n="sub_syslm">mesh + bearing clr + output pin-hole</small></span><span class="v" id="m-syslm"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_teeth">loaded teeth</span><small data-i18n="sub_teeth">sharing the rated torque</small></span><span class="v" id="m-teeth"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_preload">preload for zero backlash</span><small data-i18n="sub_preload">min interference · no-load stiffness · drag</small></span><span class="v" id="m-preload"></span></div>
+        <div class="mgroup" data-i18n="grp_dur">durability</div>
         <div class="metric"><span class="k"><span data-i18n="m_stress">contact stress</span><small data-i18n="sub_stress">peak Hertz pressure, loaded pin</small></span><span class="v" id="m-stress"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_safety">safety factor</span><small data-i18n="sub_safety">vs 1500 MPa contact-fatigue limit</small></span><span class="v" id="m-safety"></span></div>
-        <div class="metric"><span class="k"><span data-i18n="m_rmargin">worst-case margin</span><small data-i18n="sub_rmargin">every error at its tightest — &gt;0 still assembles</small></span><span class="v" id="m-rmargin"></span></div>
-        <div class="metric"><span class="k"><span data-i18n="m_teeth">loaded teeth</span><small data-i18n="sub_teeth">sharing the rated torque</small></span><span class="v" id="m-teeth"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_ostress">output-pin stress</span><small data-i18n="sub_ostress">Hertz on output pins · safety</small></span><span class="v" id="m-ostress"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_life">bearing life</span><small data-i18n="sub_life">eccentric-bearing L10 · mesh + output reaction</small></span><span class="v" id="m-life"></span></div>
-        <div class="metric"><span class="k"><span data-i18n="m_thermal">thermal drift</span><small data-i18n="sub_thermal">backlash at ΔT · housing↔gear CTE mismatch</small></span><span class="v" id="m-thermal"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_wear">sliding / wear</span><small data-i18n="sub_wear">peak slip · PV scuffing-wear index</small></span><span class="v" id="m-wear"></span></div>
-        <div class="metric"><span class="k"><span data-i18n="m_preload">preload for zero backlash</span><small data-i18n="sub_preload">min interference · no-load stiffness · drag</small></span><span class="v" id="m-preload"></span></div>
+        <div class="mgroup" data-i18n="grp_th">thermal</div>
+        <div class="metric"><span class="k"><span data-i18n="m_thermal">thermal drift</span><small data-i18n="sub_thermal">backlash at ΔT · housing↔gear CTE mismatch</small></span><span class="v" id="m-thermal"></span></div>
+        <div class="mgroup" data-i18n="grp_mfg">manufacturability</div>
+        <div class="metric"><span class="k"><span data-i18n="m_rmargin">worst-case margin</span><small data-i18n="sub_rmargin">every error at its tightest — &gt;0 still assembles</small></span><span class="v" id="m-rmargin"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_minr">min flank radius</span><small data-i18n="sub_minr">tightest concave curvature vs finishing tool</small></span><span class="v" id="m-minr"></span></div>
         </div>
       </details>
@@ -192,26 +214,7 @@
         <span><i class="swatch" style="background:var(--blue)"></i><span data-i18n="lg_shipped">shipped design</span></span>
         <span><i class="swatch" style="background:var(--orange)"></i><span data-i18n="lg_uniform">uniform</span></span>
         <span><i class="swatch" style="background:var(--green)"></i><span data-i18n="lg_yours">your design</span></span>
-        <span><i class="swatch" style="background:var(--danger)"></i><span data-i18n="lg_tol">tolerance budget</span></span>
-      </div>
-    </div>
-
-    <!-- optimize (live, this geometry) -->
-    <div class="panel full" id="optpanel">
-      <h2><span data-i18n="opt_h">Optimize for this geometry</span> <span class="aux" data-i18n="opt_sub">live multi-objective search in your browser</span></h2>
-      <div class="optbar">
-        <button id="opt-run" class="optbtn" data-i18n="opt_run">◆ Find optimal modifications</button>
-        <span class="optstat" id="opt-stat" aria-live="polite"></span>
-      </div>
-      <div class="optghost" data-i18n="opt_ghost">run once to see the design front</div>
-      <div id="optbody">
-        <div class="optgrid">
-          <canvas id="optplot"></canvas>
-          <div class="optpick" id="opt-pick"></div>
-        </div>
-        <div class="legend">
-          <span><i class="swatch" style="background:var(--green)"></i><span data-i18n="opt_lg">non-dominated designs (backlash ↔ stiffness, colour = pressure angle)</span></span>
-        </div>
+        <span><i class="swatch" style="background:var(--danger)"></i><span data-i18n="lg_tol">worst-case error</span></span>
       </div>
     </div>
 

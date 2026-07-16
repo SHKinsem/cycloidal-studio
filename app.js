@@ -101,6 +101,11 @@ const TXT = {
   sub_rmargin:  { en:'every error at its tightest — >0 still assembles', zh:'全部误差取最紧 — >0 仍可装配' },
   m_teeth:      { en:'loaded teeth', zh:'受载齿数' },
   sub_teeth:    { en:'sharing the rated torque', zh:'分担额定扭矩' },
+  m_pa:         { en:'pressure angle', zh:'压力角' },
+  grp_sys:      { en:'system', zh:'系统' },
+  grp_dur:      { en:'durability', zh:'耐久' },
+  grp_th:       { en:'thermal', zh:'热' },
+  grp_mfg:      { en:'manufacturability', zh:'可制造性' },
   m_ostress:    { en:'output-pin stress', zh:'输出销应力' },
   sub_ostress:  { en:'Hertz on output pins · safety', zh:'输出销赫兹应力 · 安全系数' },
   m_life:       { en:'bearing life', zh:'轴承寿命' },
@@ -140,15 +145,8 @@ const TXT = {
   riskword:     { en:'· jam risk', zh:'· 卡死风险' },
   opt_h:        { en:'Optimize for this geometry', zh:'为当前几何搜索最优' },
   opt_sub:      { en:'one click → the optimal curve loaded into the sliders, judged on the backlash of the units you\'d actually build', zh:'一键 → 最优曲线直接载入滑块;达标与否按"做出来的装机背隙"判定' },
-  opt_target:   { en:'target backlash', zh:'目标背隙' },
   opt_run:      { en:'◆ Get the optimal curve', zh:'◆ 一键生成最优曲线' },
   opt_running:  { en:'searching…', zh:'搜索中…' },
-  opt_hit_wc:   { en:'✓ guaranteed ≤ {b}′ even with every manufacturing error at its worst — meets your {g}′ target · loaded, SolidWorks equation ready below',
-                  zh:'✓ 即使所有加工误差同时取最坏,装机背隙也 ≤ {b}′,达标({g}′)· 已载入,下方 SolidWorks 方程就绪' },
-  opt_hit_p95:  { en:'✓ 95% of built units ≤ {p}′ — meets your {g}′ target (worst case {b}′) · loaded, SolidWorks equation ready below',
-                  zh:'✓ 按你的加工方案,95% 的件装机背隙 ≤ {p}′,达标({g}′;最坏 {b}′)· 已载入,下方方程就绪' },
-  opt_miss:     { en:'⚠ best design still gives {p}′ at the 95th percentile — {g}′ is out of reach with this plan. Shrink total error from ±{now} to ≈ ±{need} µm; the biggest lever is {src}. Loaded the closest.',
-                  zh:'⚠ 按当前加工方案,最优设计做出来 95% 分位也要 {p}′,到不了 {g}′。需把总误差从 ±{now} µm 收到约 ±{need} µm——最大的改进点是{src}。已载入最接近的。' },
   opt_result:   { en:'✓ Optimal curve loaded · backlash {b}′ (as-built ≤{a}′) · ripple {r} µrad · efficiency {e}% — SolidWorks equation ready below ↓',
                   zh:'✓ 最优曲线已载入 · 背隙 {b}′（装机 ≤{a}′）· 波动 {r} µrad · 效率 {e}% —— 下方 SolidWorks 方程就绪 ↓' },
   adv_params:   { en:'Advanced (system, durability, thermal — rarely needed; sensible defaults)',
@@ -191,14 +189,15 @@ const css = k => getComputedStyle(document.documentElement).getPropertyValue(k).
 const COL = {};
 for (const k of ['blue','orange','green','hot','danger','steel','ink','ink-2','ink-3','line','line-2','panel'])
   COL[k] = css('--'+k);
+const MONO = css('--mono');   // cached: getComputedStyle per frame is measurable jank
 let BASE = null;  // pertooth reference at current geometry, for delta arrows
 
 // ============================ canvas helpers ============================
 const I = id => document.getElementById(id);
 function fit(cv){
   const dpr=Math.min(window.devicePixelRatio||1, 2);
-  const w=cv.clientWidth, h=cv.clientHeight;
-  cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
+  const w=cv.clientWidth, h=cv.clientHeight, bw=Math.round(w*dpr), bh=Math.round(h*dpr);
+  if(cv.width!==bw||cv.height!==bh){ cv.width=bw; cv.height=bh; }   // realloc only on resize, not every animation frame
   const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
   return {ctx,w,h};
 }
@@ -260,7 +259,7 @@ function drawTooth(){
   ctx.closePath(); ctx.fillStyle='rgba(34,184,146,0.10)'; ctx.fill();
   const stroke=(XS,YS,c,wd)=>{ ctx.beginPath(); for(let k=0;k<XS.length;k++){const x=X(XS[k]),y=Y(YS[k]); k?ctx.lineTo(x,y):ctx.moveTo(x,y);} ctx.strokeStyle=c; ctx.lineWidth=wd; ctx.stroke(); };
   stroke(bx,by,'#8b96a6',1.6); stroke(mx,my,COL.green,2.2);
-  ctx.fillStyle=COL['ink-3']; ctx.font='13px '+css('--mono'); ctx.textAlign='center';
+  ctx.fillStyle=COL['ink-3']; ctx.font='13px '+MONO; ctx.textAlign='center';
   ctx.fillText(t('c_root'), X(bx[6]), Y(by[6])+16);
   ctx.fillText(t('c_tip'), X(bx[Math.round(nS/2)]), Y(by[Math.round(nS/2)])-13);
   ctx.fillText(t('c_root'), X(bx[bx.length-6]), Y(by[by.length-6])+16);
@@ -286,7 +285,7 @@ function drawClearance(){
   for(const s of series) for(const d of s.data){ ymin=Math.min(ymin,d[1]); ymax=Math.max(ymax,d[1]); }
   ymin=Math.floor((ymin-2)/5)*5; ymax=Math.ceil((ymax+2)/5)*5;
   const mapx=u=>padL+u*(w-padL-padR), mapy=v=>padT+(ymax-v)/(ymax-ymin)*(h-padT-padB);
-  ctx.font='12px '+css('--mono'); ctx.textAlign='right'; ctx.textBaseline='middle';
+  ctx.font='12px '+MONO; ctx.textAlign='right'; ctx.textBaseline='middle';
   for(let v=ymin; v<=ymax; v+=10){
     ctx.strokeStyle=COL.line; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(padL,mapy(v)); ctx.lineTo(w-padR,mapy(v)); ctx.stroke();
     ctx.fillStyle=COL['ink-3']; ctx.fillText(v, padL-6, mapy(v));
@@ -302,7 +301,6 @@ function drawClearance(){
   for(const s of series){
     ctx.beginPath(); s.data.forEach((d,i)=>{ const x=mapx(d[0]),y=mapy(d[1]); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
     ctx.strokeStyle=s.c; ctx.lineWidth=s.wd; ctx.stroke();
-    for(const d of s.data){ ctx.beginPath(); ctx.arc(mapx(d[0]),mapy(d[1]), s.n==='yours'?2.8:1.9,0,2*Math.PI); ctx.fillStyle=s.c; ctx.fill(); }
   }
 }
 
@@ -509,7 +507,7 @@ I('lang-en').addEventListener('click',()=>applyLang('en'));
 I('lang-zh').addEventListener('click',()=>applyLang('zh'));
 
 // ============================ in-browser optimizer: NSGA-II in a Web Worker ============================
-const OPT = { front:[], sel:-1, running:false, ran:false, pts:[], worker:null };
+const OPT = { front:[], sel:-1, hover:-1, running:false, ran:false, pts:[], worker:null };
 function stopWorker(){ if(OPT.worker){ OPT.worker.terminate(); OPT.worker=null; } }
 // single write-path for the optimizer verdict — the tool's most important line gets a semantic colour
 function setOptStat(msg,cls){ const el=I('opt-stat'); el.textContent=msg; el.className='optstat'+(cls?' '+cls:''); }
@@ -568,7 +566,6 @@ function applyGoalPick(autoload){
 function showPick(){
   const el=I('opt-pick'); if(OPT.sel<0||!OPT.front[OPT.sel]){ el.innerHTML=''; return; }
   const d=OPT.front[OPT.sel];
-  const paLbl = state.lang==='zh'?'压力角':'pressure angle';
   const row=(k,v)=>`<div class="row"><span class="muted">${k}</span><b>${v}</b></div>`;
   el.innerHTML =
     row(t('m_backlash'), d.backlash.toFixed(2)+"'")+
@@ -576,7 +573,7 @@ function showPick(){
     row(t('m_stiff'), d.stiff.toFixed(1)+' N·m/′')+
     (d.sigmaH!=null?row(t('m_stress'), d.sigmaH.toFixed(0)+' MPa'):'')+
     row(t('m_ripple'), d.ripple.toFixed(1)+' µrad')+
-    row(paLbl, d.maxPA.toFixed(1)+'°')+
+    row(t('m_pa'), d.maxPA.toFixed(1)+'°')+
     row(t('m_rmargin'), (d.rmargin!=null?d.rmargin.toFixed(2):'—')+"'")+
     row(t('m_teeth'), d.n_eng+' / '+getState().Np)+
     `<button class="load" id="opt-load">${t('opt_load')}</button>`;
@@ -584,31 +581,63 @@ function showPick(){
 }
 const VIRID=[[253,231,37],[94,201,98],[33,145,140],[59,82,139],[68,1,84]];
 function optColor(tt){ tt=Math.max(0,Math.min(1,tt)); const x=tt*4,i=Math.floor(x),f=x-i,a=VIRID[i],b=VIRID[Math.min(i+1,4)]; return `rgb(${a[0]+(b[0]-a[0])*f|0},${a[1]+(b[1]-a[1])*f|0},${a[2]+(b[2]-a[2])*f|0})`; }
+function niceTicks(mn,mx,n){ const span=mx-mn; if(!(span>0)) return [mn];
+  const raw=span/n, mag=Math.pow(10,Math.floor(Math.log10(raw))), r=raw/mag;
+  const step=(r>=5?5:r>=2?2:1)*mag, out=[];
+  for(let v=Math.ceil(mn/step-1e-9)*step; v<=mx+step*1e-6; v+=step) out.push(v);
+  return out; }
+const tickFmt=(v,step)=> step>=1? v.toFixed(0) : step>=0.1? v.toFixed(1) : v.toFixed(2);
 function drawOptPlot(){
   const F=OPT.front;
   I('optpanel').classList.toggle('optempty', !OPT.running && !F.length);   // pre-run / stale: ghost hint, no 430px void
   const {ctx,w,h}=fit(I('optplot')); ctx.clearRect(0,0,w,h);
-  const padL=48,padR=12,padT=12,padB=34;
-  if(!F.length){ ctx.fillStyle=COL['ink-3']; ctx.font='13px '+css('--mono'); ctx.textAlign='center';
+  const padL=48,padR=56,padT=12,padB=34;   // padR holds the pressure-angle colorbar
+  if(!F.length){ ctx.fillStyle=COL['ink-3']; ctx.font='13px '+MONO; ctx.textAlign='center';
     ctx.fillText(OPT.running?'…':'—', w/2, h/2); OPT.pts=[]; return; }
   const B=F.map(d=>d.backlash), S=F.map(d=>d.stiff), P=F.map(d=>d.maxPA);
   const bmn=Math.min(...B),bmx=Math.max(...B),smn=Math.min(...S),smx=Math.max(...S),pmn=Math.min(...P),pmx=Math.max(...P);
   const X=v=>padL+(v-bmn)/((bmx-bmn)||1)*(w-padL-padR), Y=v=>padT+(smx-v)/((smx-smn)||1)*(h-padT-padB);
-  ctx.font='11px '+css('--mono'); ctx.strokeStyle=COL.line; ctx.lineWidth=1; ctx.textAlign='right'; ctx.textBaseline='middle';
-  for(let gi=0;gi<=3;gi++){ const v=smn+(smx-smn)*gi/3; ctx.beginPath();ctx.moveTo(padL,Y(v));ctx.lineTo(w-padR,Y(v));ctx.stroke(); ctx.fillStyle=COL['ink-3']; ctx.fillText(v.toFixed(0),padL-6,Y(v)); }
-  ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle=COL['ink-3'];
-  for(let gi=0;gi<=3;gi++){ const v=bmn+(bmx-bmn)*gi/3; ctx.fillText(v.toFixed(1),X(v),h-20); }
-  ctx.fillStyle=COL['ink-2']; ctx.fillText(t('m_backlash')+" [']  ↓", w/2, h-5);
+  ctx.font='11px '+MONO; ctx.lineWidth=1;
+  const ty=niceTicks(smn,smx,3), tys=ty.length>1?ty[1]-ty[0]:1;
+  ctx.textAlign='right'; ctx.textBaseline='middle';
+  for(const v of ty){ ctx.strokeStyle=COL.line; ctx.beginPath();ctx.moveTo(padL,Y(v));ctx.lineTo(w-padR,Y(v));ctx.stroke();
+    ctx.fillStyle=COL['ink-3']; ctx.fillText(tickFmt(v,tys),padL-6,Y(v)); }
+  const tx=niceTicks(bmn,bmx,4), txs=tx.length>1?tx[1]-tx[0]:1;
+  ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  for(const v of tx){ ctx.strokeStyle=COL.line; ctx.beginPath();ctx.moveTo(X(v),padT);ctx.lineTo(X(v),h-padB);ctx.stroke();
+    ctx.fillStyle=COL['ink-3']; ctx.fillText(tickFmt(v,txs),X(v),h-20); }
+  ctx.fillStyle=COL['ink-2']; ctx.fillText(t('m_backlash')+" [']  ↓", (padL+w-padR)/2, h-5);
   ctx.save();ctx.translate(13,h/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';ctx.fillText(t('m_stiff')+'  ↑',0,0);ctx.restore();
+  // colorbar: the legend says "colour = pressure angle" — give the colours a scale
+  const cbx=w-padR+14, cbw=8, cb0=padT+8, cb1=h-padB-8;
+  for(let yy=cb0; yy<=cb1; yy++){ ctx.fillStyle=optColor(1-(yy-cb0)/(cb1-cb0)); ctx.fillRect(cbx,yy,cbw,1); }
+  ctx.font='10px '+MONO; ctx.fillStyle=COL['ink-3']; ctx.textAlign='left';
+  ctx.textBaseline='top';    ctx.fillText(pmx.toFixed(0)+'°', cbx+cbw+3, cb0-2);
+  ctx.textBaseline='bottom'; ctx.fillText(pmn.toFixed(0)+'°', cbx+cbw+3, cb1+2);
+  ctx.textBaseline='alphabetic';
   OPT.pts=[];
   for(let i=0;i<F.length;i++){ const sx=X(B[i]),sy=Y(S[i]); OPT.pts.push([sx,sy]);
     ctx.beginPath();ctx.arc(sx,sy,i===OPT.sel?7:5,0,2*Math.PI); ctx.fillStyle=optColor((P[i]-pmn)/((pmx-pmn)||1)); ctx.fill();
-    if(i===OPT.sel){ ctx.lineWidth=2.5; ctx.strokeStyle=COL.danger; ctx.stroke(); } }
+    if(i===OPT.sel){ ctx.lineWidth=2.5; ctx.strokeStyle=COL.danger; ctx.stroke(); }
+    else if(i===OPT.hover){ ctx.lineWidth=1.5; ctx.strokeStyle=COL.ink; ctx.stroke(); } }
+  if(OPT.hover>=0 && OPT.hover<F.length){   // hover tooltip: read the numbers without committing a click
+    const d=F[OPT.hover], [sx,sy]=OPT.pts[OPT.hover];
+    const txt=`${d.backlash.toFixed(2)}′ · ${d.stiff.toFixed(1)} N·m/′ · ${d.maxPA.toFixed(0)}°`;
+    ctx.font='12px '+MONO; const tw=ctx.measureText(txt).width;
+    const bxp=Math.min(Math.max(sx-tw/2-6,padL),w-padR-tw-12), byp= sy-32<padT? sy+12 : sy-32;
+    ctx.fillStyle='rgba(12,13,15,.92)'; ctx.strokeStyle=COL['line-2'];
+    ctx.beginPath(); ctx.roundRect(bxp,byp,tw+12,20,5); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=COL.ink; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText(txt,bxp+6,byp+10);
+    ctx.textBaseline='alphabetic';
+  }
 }
-I('optplot').addEventListener('click',e=>{ if(!OPT.pts.length) return;
+function optHit(e){ if(!OPT.pts.length) return -1;
   const r=e.currentTarget.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
   let bi=-1,bd=400; for(let i=0;i<OPT.pts.length;i++){ const dx=OPT.pts[i][0]-mx,dy=OPT.pts[i][1]-my,dd=dx*dx+dy*dy; if(dd<bd){bd=dd;bi=i;} }
-  if(bi>=0){ OPT.sel=bi; drawOptPlot(); showPick(); } });
+  return bi; }
+I('optplot').addEventListener('click',e=>{ const bi=optHit(e); if(bi>=0){ OPT.sel=bi; drawOptPlot(); showPick(); } });
+I('optplot').addEventListener('mousemove',e=>{ const bi=optHit(e); if(bi!==OPT.hover){ OPT.hover=bi; drawOptPlot(); } });
+I('optplot').addEventListener('mouseleave',()=>{ if(OPT.hover!==-1){ OPT.hover=-1; drawOptPlot(); } });
 I('opt-run').addEventListener('click',runOptimize);
 
 // ============================ animation ============================
