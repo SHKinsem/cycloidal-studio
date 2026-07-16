@@ -163,6 +163,8 @@ const TXT = {
   opt_err:      { en:'optimizer error (see console)', zh:'优化器出错（见控制台）' },
   opt_prog:     { en:'{p}% · {n} designs', zh:'{p}% · 已找到 {n} 个设计' },
   opt_load:     { en:'load into sliders →', zh:'载入滑块 →' },
+  pin_on:       { en:'pin — keeps this chart on screen while you scroll & tune', zh:'钉住 — 滚动/调参时保持可见' },
+  pin_off:      { en:'unpin — back to its place', zh:'取消钉住 — 回到原位' },
   how:          { en:'In SolidWorks: Insert → Curve → Equation Driven Curve → Parametric. Set t from 0 to 6.28318, paste X(t) and Y(t). Or import the CSV via Insert → Curve → Curve Through XYZ Points, then Fit Spline.',
                   zh:'在 SolidWorks 中：插入 → 曲线 → 方程驱动曲线 → 参数化。设 t 从 0 到 6.28318，粘贴 X(t) 与 Y(t)。或用 插入 → 曲线 → 通过 XYZ 点的曲线 导入 CSV，再用 拟合样条。' },
   c_tip:        { en:'tip', zh:'齿顶' },
@@ -407,6 +409,7 @@ function applyLang(lang){
   I('lang-zh').classList.toggle('on', lang==='zh');
   updateMetrics();
   drawTooth(); drawClearance();
+  updatePinGlyphs();
   if(typeof OPT!=='undefined'){
     if(!OPT.ran) setOptStat(t('opt_hint'));
     else if(OPT.front.length && !OPT.running) applyGoalPick(false);   // re-render the verdict in the new language
@@ -505,6 +508,19 @@ I('copy-both').addEventListener('click',e=>{ const {X,Y}=swEquations(); copyText
 I('dl-csv').addEventListener('click',downloadCSV);
 I('lang-en').addEventListener('click',()=>applyLang('en'));
 I('lang-zh').addEventListener('click',()=>applyLang('zh'));
+
+// ---- pin: float a chart panel bottom-right (one at a time) so it tracks the window while you tune ----
+function updatePinGlyphs(){ document.querySelectorAll('.panel .pin').forEach(b=>{
+  const on=b.closest('.panel').classList.contains('pinned');
+  b.textContent=on?'✕':'❐'; b.title=t(on?'pin_off':'pin_on');
+  b.setAttribute('aria-label',b.title); b.setAttribute('aria-pressed',on); }); }
+document.querySelectorAll('.panel .pin').forEach(b=>b.addEventListener('click',()=>{
+  const p=b.closest('.panel'), was=p.classList.contains('pinned');
+  document.querySelectorAll('.panel.pinned').forEach(q=>q.classList.remove('pinned'));
+  if(!was) p.classList.add('pinned');
+  updatePinGlyphs();
+  drawMesh(); drawTooth(); drawClearance();   // canvas CSS size just changed — re-fit immediately
+}));
 
 // ============================ in-browser optimizer: NSGA-II in a Web Worker ============================
 const OPT = { front:[], sel:-1, hover:-1, running:false, ran:false, pts:[], worker:null };

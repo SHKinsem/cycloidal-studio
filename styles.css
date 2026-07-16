@@ -51,7 +51,17 @@
     font-family: var(--mono); font-size: 13px; letter-spacing: .14em; text-transform: uppercase;
     color: var(--ink-3); margin: 0 0 14px; font-weight: 500; display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
   }
-  .panel h2 .aux { color: var(--ink-3); letter-spacing: 0; text-transform: none; font-size: 12.5px; font-weight: 400; }
+  .panel h2 .aux { color: var(--ink-3); letter-spacing: 0; text-transform: none; font-size: 12.5px; font-weight: 400; margin-left: auto; }
+  /* pin: float a chart panel bottom-right so it stays visible while tuning sliders elsewhere */
+  .panel h2 .pin { flex: none; font-family: var(--mono); font-size: 12px; line-height: 1; color: var(--ink-3);
+    background: transparent; border: 1px solid transparent; border-radius: 5px; padding: 3px 7px; cursor: pointer;
+    transition: color .15s, border-color .15s; }
+  .panel h2 .pin:hover { color: var(--green); border-color: var(--line-2); }
+  .panel h2 .pin:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
+  .panel.pinned { position: fixed; right: 18px; bottom: 18px; width: min(420px, 46vw); z-index: 60;
+    max-height: 78vh; overflow: auto; border-color: var(--line-2); box-shadow: 0 14px 44px rgba(0,0,0,.6); }
+  .panel.pinned h2 .pin { color: var(--green); }
+  @media (max-width: 720px){ .panel.pinned { width: calc(100vw - 24px); right: 12px; bottom: 12px; max-height: 55vh; } }
   .fields { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
   @media (max-width: 720px){ .fields { grid-template-columns: repeat(3, 1fr); } }
   @media (max-width: 420px){ .fields { grid-template-columns: repeat(2, 1fr); } }
