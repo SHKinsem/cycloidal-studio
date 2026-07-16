@@ -7,7 +7,7 @@
     --line-2:  #363b44;
     --ink:     #eceef1;
     --ink-2:   #a2a8b0;
-    --ink-3:   #6b7178;
+    --ink-3:   #828a94;   /* ≥4.5:1 on --panel — axis text, units, sublines all read at arm's length */
     --blue:    #3987e5;   /* shipped design */
     --orange:  #e0864a;   /* uniform offset */
     --green:   #22b892;   /* your design (hero) */
@@ -64,6 +64,7 @@
     font-variant-numeric: tabular-nums;
   }
   .field input:focus-visible { outline: 2px solid var(--green); outline-offset: 0; border-color: var(--green); }
+  .field input[type=checkbox] { width: 22px; height: 22px; margin-top: 7px; padding: 0; accent-color: var(--green); cursor: pointer; }
   .warnbar { display: none; margin-top: 12px; font-family: var(--mono); font-size: 13px; color: var(--hot);
     border: 1px solid var(--hot); background: rgba(250,178,25,.10); border-radius: 6px; padding: 8px 11px; }
   .warnbar.on { display: block; }
@@ -72,7 +73,8 @@
   .advset { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 8px; }
   .advset:not([open]) > *:not(summary) { display: none; }   /* force-collapse content when closed */
   .advset > summary { font-family: var(--mono); font-size: 12px; color: var(--ink-3); cursor: pointer; letter-spacing: .04em; list-style: revert; user-select: none; }
-  .advset > summary:hover { color: var(--ink-2, var(--ink-3)); }
+  .advset > summary:hover { color: var(--ink-2); }
+  .advset > summary:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; border-radius: 3px; }
   .advset[open] > summary { margin-bottom: 12px; }
   .advset .metrics { border-top: none; margin-top: 0; padding-top: 0; }
   .mfg { border-top: 1px dashed var(--line); margin-top: 14px; padding-top: 12px; }
@@ -91,7 +93,7 @@
   .budget .hint { color: var(--hot); white-space: nowrap; }
 
   /* ---- layout ---- */
-  .grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 16px; }
+  .grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 16px; align-items: start; }   /* start: a tall foldout must not stretch its row-mate into dead space */
   @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; position: relative; min-width: 0; }
   .full { grid-column: 1 / -1; }
@@ -142,6 +144,7 @@
   input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--ink); border: 2px solid var(--bg); cursor: pointer; box-shadow: 0 0 0 1px var(--line-2); }
   input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--ink); border: 2px solid var(--bg); cursor: pointer; }
   input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--green); }
+  input[type=range]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(--green); }
 
   /* ---- metrics ---- */
   .metrics { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 16px; }
@@ -190,6 +193,15 @@
   button.optbtn:disabled { background: var(--line-2); color: var(--ink-3); cursor: default; filter: none; }
   button.optbtn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   .optstat { font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); flex: 1; min-width: 220px; }
+  .optstat.ok   { color: var(--green); }
+  .optstat.warn { color: var(--hot); }
+  .optstat.err  { color: var(--danger); }
+  .optstat.busy { color: var(--ink-2); }
+  /* pre-run / stale: collapse the empty plot area to a one-line ghost hint instead of a 430px void */
+  .optghost { display: none; font-family: var(--mono); font-size: 13px; color: var(--ink-3);
+    border: 1px dashed var(--line-2); border-radius: 8px; padding: 26px 12px; text-align: center; }
+  #optpanel.optempty .optghost { display: block; }
+  #optpanel.optempty #optbody { display: none; }
   .optgrid { display: grid; grid-template-columns: 1.4fr .6fr; gap: 16px; }
   @media (max-width: 720px){ .optgrid { grid-template-columns: 1fr; } }
   #optplot { display: block; width: 100%; aspect-ratio: 2 / 1; }
@@ -197,7 +209,9 @@
   .optpick .row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
   .optpick .row b { color: var(--ink); font-weight: 500; }
   .optpick .muted { color: var(--ink-3); }
-  .optpick .load { margin-top: 10px; font-family: var(--mono); font-size: 12.5px; color: var(--bg); background: var(--green); border: 0; border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+  .optpick .load { margin-top: 10px; font-family: var(--mono); font-size: 12.5px; color: var(--bg); background: var(--green); border: 0; border-radius: 6px; padding: 7px 12px; cursor: pointer; transition: filter .15s; }
+  .optpick .load:hover { filter: brightness(1.1); }
+  .optpick .load:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
   /* CJK doesn't benefit from the wide tracking meant for uppercase Latin */
   :root:lang(zh) .eyebrow { letter-spacing: .1em; }

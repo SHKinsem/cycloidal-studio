@@ -1,21 +1,22 @@
 import { configure, getState, profile, meshState, windup, playRange, hertzMaxMPa, phasedPtp, profileHealth } from './physics.js';
 var DWC=0, OUT_K=Infinity, N_DISC=1, R_TOOL=0.1, NK=4;
-function evalFast(offset,coeffs){
-  var nPts=1800, ns=14, prof=profile(offset,coeffs,nPts), arcmin=180/Math.PI*60;
+function evalFast(offset,coeffs,nPts,ns){
+  nPts=nPts||1800; ns=ns||14;   // GA grade by default; the final pick window is re-run at 8000/48 (panel grade)
+  var prof=profile(offset,coeffs,nPts), arcmin=180/Math.PI*60;
   var __s=getState(), N=__s.N, Np=__s.Np, PINS=__s.PINS;
   var plays=[],blmaxs=[],rmargins=[],ks=[],bs=[],nes=[], paMax=0, sigMax=0;
   for(var i=0;i<ns;i++){ var psi=2*Math.PI/N*i/ns, ms=meshState(prof,psi);
     var pr=playRange(ms.gaps,ms.arms); plays.push(pr[1]-pr[0]);
     var pm2=playRange(ms.gaps,ms.arms,DWC); rmargins.push(pm2[1]-pm2[0]);
     var pl=playRange(ms.gaps,ms.arms,-DWC); blmaxs.push(pl[1]-pl[0]);
-    var w=windup(ms.gaps,ms.arms); ks.push(w.k); bs.push(w.b); nes.push(w.ne);
+    var w=windup(ms.gaps,ms.arms,__s.T_RATED/N_DISC); ks.push(w.k); bs.push(w.b); nes.push(w.ne);   // per-disc share
     var sg=hertzMaxMPa(w.F,ms.invre); if(sg>sigMax)sigMax=sg;
     var fmax=1e-9; for(var j=0;j<Np;j++) if(w.F[j]>fmax)fmax=w.F[j];
     for(var j=0;j<Np;j++){ if(w.F[j]>0.10*fmax){ var px=PINS[j][0],py=PINS[j][1], nx=px-ms.cpx[j], ny=py-ms.cpy[j], nn=Math.hypot(nx,ny);
       if(nn>1e-9){ var phi=Math.atan2(py,px), c=Math.abs((nx/nn)*(-Math.sin(phi))+(ny/nn)*Math.cos(phi)); var a=Math.acos(Math.min(1,Math.max(0,c)))*180/Math.PI; if(a>paMax)paMax=a; } } }
   }
   var kmesh=Math.min.apply(null,ks)/1e3/arcmin;
-  var ksys=(OUT_K>0&&isFinite(OUT_K))? 1/(1/kmesh+1/OUT_K) : kmesh;   // series with output pin-hole stage (matches main panel)
+  var ksys=((OUT_K>0&&isFinite(OUT_K))? 1/(1/kmesh+1/OUT_K) : kmesh)*N_DISC;   // per-disc series chain, N_DISC discs in parallel (matches main panel)
   var H=profileHealth(prof.X,prof.Y);
   return { backlash:Math.max.apply(null,plays)*arcmin, blmax:Math.max.apply(null,blmaxs)*arcmin,
            stiff:ksys,
@@ -27,7 +28,7 @@ var LO=[-0.10,-0.04,-0.04,-0.04,-0.04], HI=[-0.015,0.04,0.04,0.04,0.04], D=5, PO
 function rnd(a,b){return a+Math.random()*(b-a);}
 function clamp(v,a,b){return v<a?a:(v>b?b:v);}
 function newx(){var x=[];for(var i=0;i<D;i++)x.push(rnd(LO[i],HI[i]));return x;}
-function evalx(x){ var coeffs=x.slice(1), r=evalFast(x[0],coeffs), dmax=x[0];
+function evalx(x,nPts,ns){ var coeffs=x.slice(1), r=evalFast(x[0],coeffs,nPts,ns), dmax=x[0];
   for(var i=0;i<coeffs.length;i++)dmax+=Math.abs(coeffs[i]);
   var cv=0; if(dmax>-0.005)cv+=(dmax+0.005)*100; if(!isFinite(r.ripple))cv+=100;
   if(r.rmargin<0.05)cv+=(0.05-r.rmargin); if(r.n_eng<2)cv+=1;   // robust: must survive worst machining error
@@ -63,7 +64,14 @@ function updateArch(pop){
   var pool=ARCH.slice();
   for(var i=0;i<pop.length;i++) if(pop[i].cv===0) pool.push(pop[i]);
   var nd=pool.filter(function(p,i){ for(var j=0;j<pool.length;j++){ if(j!==i && dom(pool[j],p)) return false; } return true; });
-  var uniq=[]; nd.forEach(function(p){ if(!uniq.some(function(q){return Math.abs(q.backlash-p.backlash)<0.05 && Math.abs(q.stiff-p.stiff)<0.2;})) uniq.push(p); });
+  // cell winner = lexicographic backlash-then-ripple (first-wins used to keep an arbitrary point per cell,
+  // silently discarding same-cell designs with lower ripple that 4-obj dominance had kept — which broke
+  // the "smoothest among min-backlash" promise of the final pick).
+  var uniq=[]; nd.forEach(function(p){
+    var qi=-1; for(var i=0;i<uniq.length;i++){ if(Math.abs(uniq[i].backlash-p.backlash)<0.05 && Math.abs(uniq[i].stiff-p.stiff)<0.2){ qi=i; break; } }
+    if(qi<0) uniq.push(p);
+    else if(p.backlash<uniq[qi].backlash-1e-9 || (p.backlash<uniq[qi].backlash+1e-9 && p.ripple<uniq[qi].ripple)) uniq[qi]=p;
+  });
   ARCH=uniq;
 }
 function toOut(list){ return list.map(function(p){ return {offset:p.x[0],coeffs:p.x.slice(1),backlash:p.backlash,blmax:p.blmax,stiff:p.stiff,ripple:p.ripple,maxPA:p.maxPA,rmargin:p.rmargin,n_eng:p.n_eng,sigmaH:p.sigmaH}; }); }
@@ -83,7 +91,38 @@ function run(){
     updateArch(pop);
     postMessage({type:'progress', pct:Math.round(100*(gen+1)/GEN), front:toOut(ARCH)});
   }
+  finalRefine();
   postMessage({type:'done', pct:100, front:toOut(ARCH)});
+}
+// Final pass on the pick path: (1) re-evaluate the pick window (min-backlash + 0.6') at DISPLAY grade
+// (8000 pts / 48 poses — the numbers the main panel shows; the 1800-pt GA estimator ranks inside its own
+// ~0.1' grid noise), (2) compass/pattern search from the winner at GA grade, steps 2 µm → 0.1 µm — the
+// refinement GA mutation granularity cannot do — accepted only if it wins again at display grade.
+function lexBetter(a,b){ if(a.backlash<b.backlash-1e-4) return true; if(a.backlash>b.backlash+1e-4) return false; return b.ripple-a.ripple>1e-9; }
+function finalRefine(){
+  var blMin=Infinity; for(var i=0;i<ARCH.length;i++) if(ARCH[i].backlash<blMin) blMin=ARCH[i].backlash;
+  var win=[]; for(var i=0;i<ARCH.length;i++) if(ARCH[i].backlash<=blMin+0.6) win.push(i);
+  win.sort(function(a,b){return ARCH[a].backlash-ARCH[b].backlash;});
+  for(var k=0;k<Math.min(win.length,16);k++){ var hi=evalx(ARCH[win[k]].x,8000,48); if(hi.cv===0) ARCH[win[k]]=hi; }
+  var best=null; for(var i=0;i<ARCH.length;i++) if(ARCH[i].cv===0 && (best===null||lexBetter(ARCH[i],best))) best=ARCH[i];
+  if(best){
+    var cur=evalx(best.x.slice()), step=0.002, evals=0;
+    while(step>=0.0001 && evals<420){
+      var improved=false;
+      for(var i=0;i<D;i++) for(var sd=-1;sd<=1;sd+=2){
+        var x=cur.x.slice(); x[i]=clamp(x[i]+sd*step,LO[i],HI[i]);
+        var c=evalx(x); evals++;
+        if(c.cv===0 && lexBetter(c,cur)){ cur=c; improved=true; }
+      }
+      if(!improved) step/=2;
+    }
+    var pol=evalx(cur.x,8000,48);
+    if(pol.cv===0 && lexBetter(pol,best)){
+      ARCH.push(pol);
+      postMessage({type:'log', msg:'polish: backlash '+best.backlash.toFixed(3)+'→'+pol.backlash.toFixed(3)+"' · ripple "+best.ripple.toFixed(2)+'→'+pol.ripple.toFixed(2)+' µrad ('+evals+' evals)'});
+    }
+  }
+  updateArch([]);   // re-filter: display-grade entries + polish point vs the rest, dedup cells
 }
 onmessage=function(e){ var g=e.data;
   configure({Rb:g.Rb,Rr:g.Rr,E:g.E,N:g.N,T_RATED:g.T_RATED,ROT_SIGN:g.ROT,PINS:g.PINS,L_TOOTH:g.L_TOOTH});

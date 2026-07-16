@@ -58,6 +58,8 @@ const TXT = {
   lbl_adje:     { en:'adjustable ecc', zh:'可调偏心' },
   adje_unit:    { en:'matched assy', zh:'配对装配' },
   adje_on:      { en:'· dial E per unit', zh:'· 每台调E' },
+  lbl_orol:     { en:'output rollers', zh:'输出销滚子' },
+  orol_unit:    { en:'rolling', zh:'滚动接触' },
   warn:         { en:"Geometry undercuts — the unmodified tooth can't mesh with all pins. Reduce E or increase Rb.",
                   zh:'几何根切 —— 未修型齿廓无法与全部针齿共轭啮合。请减小 E 或增大 Rb。' },
   mesh_h:       { en:'Mesh', zh:'啮合' },
@@ -102,12 +104,12 @@ const TXT = {
   m_ostress:    { en:'output-pin stress', zh:'输出销应力' },
   sub_ostress:  { en:'Hertz on output pins · safety', zh:'输出销赫兹应力 · 安全系数' },
   m_life:       { en:'bearing life', zh:'轴承寿命' },
-  sub_life:     { en:'eccentric-bearing L10 · mesh reaction only', zh:'偏心轴承 L10 · 仅啮合反力' },
+  sub_life:     { en:'eccentric-bearing L10 · mesh + output reaction', zh:'偏心轴承 L10 · 啮合+输出反力' },
   m_thermal:    { en:'thermal drift', zh:'热漂移' },
   sub_thermal:  { en:'backlash at ΔT · housing↔gear CTE mismatch', zh:'温升下背隙 · 壳体↔盘热膨胀失配' },
   th_off:       { en:'set ΔT to check', zh:'设温升以检查' },
   m_eff:        { en:'mesh efficiency', zh:'啮合效率' },
-  sub_eff:      { en:'sliding loss · fwd / backdrive · excl. bearings-seals', zh:'滑动损耗 · 正驱/反驱 · 不含轴承密封' },
+  sub_eff:      { en:'sliding loss · mesh + output pins · fwd / backdrive', zh:'滑动损耗 · 啮合+输出销 · 正驱/反驱' },
   m_wear:       { en:'sliding / wear', zh:'滑动 / 磨损' },
   sub_wear:     { en:'peak slip · PV scuffing-wear index', zh:'峰值滑动 · PV 胶合磨损指标' },
   nonbd:        { en:'non-backdrive', zh:'不可逆' },
@@ -159,6 +161,9 @@ const TXT = {
   opt_none:     { en:'no feasible design in range — loosen the manufacturing plan or geometry', zh:'范围内无可行解 — 放宽加工方案或几何' },
   opt_lg:       { en:'non-dominated designs (backlash ↔ stiffness, colour = pressure angle)',
                   zh:'非支配设计 (背隙 ↔ 刚度, 颜色 = 压力角)' },
+  opt_ghost:    { en:'run once to see the design front', zh:'运行一次即可看到设计前沿' },
+  opt_err:      { en:'optimizer error (see console)', zh:'优化器出错（见控制台）' },
+  opt_prog:     { en:'{p}% · {n} designs', zh:'{p}% · 已找到 {n} 个设计' },
   opt_load:     { en:'load into sliders →', zh:'载入滑块 →' },
   how:          { en:'In SolidWorks: Insert → Curve → Equation Driven Curve → Parametric. Set t from 0 to 6.28318, paste X(t) and Y(t). Or import the CSV via Insert → Curve → Curve Through XYZ Points, then Fit Spline.',
                   zh:'在 SolidWorks 中：插入 → 曲线 → 方程驱动曲线 → 参数化。设 t 从 0 到 6.28318，粘贴 X(t) 与 Y(t)。或用 插入 → 曲线 → 通过 XYZ 点的曲线 导入 CSV，再用 拟合样条。' },
@@ -169,8 +174,8 @@ const TXT = {
   c_stack:      { en:'worst-case error', zh:'最坏总误差' },
   footer_read:  { en:"Reading it: tight at the mid-flank (where the arm is longest) carries load with little lost motion — that buys stiffness and low backlash. Relieved at tip and root leaves room for the tolerance stack and softens entry/exit shock. That reverse-bow, sitting right at the tolerance edge, is what the GA optimum finds.",
                   zh:'看图：齿腰（力臂最长处）最紧 —— 用极小的空回承载，换来高刚度、低背隙；齿顶与齿根放松 —— 给公差叠加留余量、缓和入啮/出啮冲击。这条贴着公差边界的"反弓"曲线，正是 GA 最优解。' },
-  footer_note:  { en:'Model: quasi-static, rigid disk, linearised load-sharing (K=50 N/µm per tooth). As-built backlash is a 400-sample Monte-Carlo over the per-part manufacturing errors (pin batch common-mode; holes and flank independent per pin; eccentricity via finite-difference gap sensitivity); worst-case numbers put every error at its extreme simultaneously. System lost motion adds bearing/output clearances as lumped deadbands; contact stress is a Hertz line-contact post-process (steel, 1500 MPa fatigue limit). Trends are faithful; absolute values are order-of-magnitude. No lubricant film / dynamics.',
-                  zh:'模型：准静态、刚性盘、线性化载荷分配（K=50 N/µm 每齿）。装机背隙为对各加工误差源做 400 次蒙特卡洛抽样（针销同批共模;销孔与齿面逐针独立;偏心距经有限差分间隙灵敏度折算）;"最坏"类指标为全部误差同时取极值。系统空回把轴承与输出机构间隙作为集总死区叠加；接触应力是赫兹线接触后处理（钢，1500 MPa 疲劳极限）。趋势可靠，绝对值为量级估计。未含油膜与动力学。' },
+  footer_note:  { en:'Model: quasi-static, rigid disk, linearised load-sharing (K ∝ disk width; 50 N/µm per tooth at 10 mm). As-built backlash is a 400-sample Monte-Carlo over the per-part manufacturing errors (pin batch common-mode; holes and flank independent per pin; eccentricity via finite-difference gap sensitivity); worst-case numbers put every error at its extreme simultaneously. System lost motion adds bearing/output clearances as lumped deadbands; contact stress is a Hertz line-contact post-process (steel, 1500 MPa fatigue limit). Trends are faithful; absolute values are order-of-magnitude. No lubricant film / dynamics.',
+                  zh:'模型：准静态、刚性盘、线性化载荷分配（K∝盘宽，10mm 时 50 N/µm 每齿）。装机背隙为对各加工误差源做 400 次蒙特卡洛抽样（针销同批共模;销孔与齿面逐针独立;偏心距经有限差分间隙灵敏度折算）;"最坏"类指标为全部误差同时取极值。系统空回把轴承与输出机构间隙作为集总死区叠加；接触应力是赫兹线接触后处理（钢，1500 MPa 疲劳极限）。趋势可靠，绝对值为量级估计。未含油膜与动力学。' },
 };
 const NK = 4;   // number of harmonics in the modification δ(θ)=offset+Σ_{k=1}^{NK} c_k·cos(kNθ)
 const state = { offset:-0.0209, coeffs:[-0.0012,-0.0037,0,0], psi:0, playing:true, speed:0.45, exag:40, lang:'en' };
@@ -335,7 +340,7 @@ function updateMetrics(){
   const rstate = r.rmargin<=0?'bad':(r.rmargin<0.5?'warn':'');
   const rcue = rstate==='bad'?` <u>${t('jamword')}</u>` : rstate==='warn'?` <u>${t('tight')}</u>` : '';
   set('m-rmargin',  `${fmt(Math.max(r.rmargin,-99))}<u>′</u>${rcue}`, rstate);   // deep interference: the cue matters, not the number
-  set('m-teeth',    `${r.n_eng}<u>/ ${Np}</u>`);
+  set('m-teeth',    `${r.n_eng}<u>/ ${Np}${N_DISC>1?' ·/disc':''}</u>`);
   set('m-ostress',  `${fmt(r.outSigma,0)}<u>MPa · ${fmt(r.outSafety,2)}×</u>`, r.outSafety<1?'bad':(r.outSafety<1.2?'warn':''));
   set('m-life',     lifeStr(r));
   const th=thermalDrift(state.offset,state.coeffs);
@@ -405,7 +410,7 @@ function applyLang(lang){
   updateMetrics();
   drawTooth(); drawClearance();
   if(typeof OPT!=='undefined'){
-    if(!OPT.ran) I('opt-stat').textContent=t('opt_hint');
+    if(!OPT.ran) setOptStat(t('opt_hint'));
     else if(OPT.front.length && !OPT.running) applyGoalPick(false);   // re-render the verdict in the new language
     drawOptPlot(); if(OPT.sel>=0) showPick();
   }
@@ -447,6 +452,7 @@ function readSpec(){   // durability / lost-motion spec — affects metrics only
     N_DISC :Math.round(clampNum(+I('g-ndisc').value||1, 1, 3)),
     R_TOOL :clampNum(+I('g-rtool').value||0.1, 0.02, 5),
     A_ADJ  :I('g-adje').checked,
+    O_ROLL :I('g-orol').checked,
   });
   rebuildOutStage();   // output stage depends only on geometry/spec — recompute here, cache in OUT
 }
@@ -478,8 +484,12 @@ document.querySelectorAll('.presets button').forEach(b=>b.addEventListener('clic
 I('s-offset').addEventListener('input',e=>{ state.offset=clampNum(+e.target.value/1e3,-0.12,0.04); afterChange(); });   // negative = clearance (backlash); ≥0 = interference/preload (metrics flag jam)
 for(let k=1;k<=NK;k++){ I('s-c'+k).addEventListener('input',e=>{ state.coeffs[k-1]=+e.target.value/1e3; afterChange(); }); }
 ['g-Rb','g-Rr','g-E','g-N','g-T'].forEach(id=>I(id).addEventListener('input',applyGeometry));
-['g-thick','g-cbear','g-cout','g-rw','g-zw','g-rwp','g-cbrg','g-nin','g-dt','g-cteh','g-cted','g-mu','g-ndisc','g-rtool','g-adje'].forEach(id=>I(id).addEventListener('input',()=>{ readSpec(); scheduleMetrics(); }));
-I('g-adje').addEventListener('change',()=>{ readSpec(); scheduleMetrics(); });   // checkbox: 'change' is the reliable toggle event
+// spec inputs that the GA actually consumes (K∝width, OUT.k, DWC, N_DISC, tool guard) must also stale the front
+const GA_SPEC=new Set(['g-thick','g-cout','g-rw','g-zw','g-rwp','g-ndisc','g-rtool','g-adje']);
+const specChanged=id=>{ readSpec(); if(GA_SPEC.has(id)) invalidateOpt(); scheduleMetrics(); };
+['g-thick','g-cbear','g-cout','g-rw','g-zw','g-rwp','g-cbrg','g-nin','g-dt','g-cteh','g-cted','g-mu','g-ndisc','g-rtool','g-adje','g-orol'].forEach(id=>I(id).addEventListener('input',()=>specChanged(id)));
+I('g-adje').addEventListener('change',()=>specChanged('g-adje'));   // checkbox: 'change' is the reliable toggle event
+I('g-orol').addEventListener('change',()=>specChanged('g-orol'));
 // process picker fills the µm field; editing the field flips the picker to "custom"
 const TOOLR={'2':0.3,'4':0.1,'12':0.15,'15':1.0,'60':0.4};   // profile process → finishing tool radius [mm]
 [['p-prof','e-prof'],['p-pin','e-pin'],['p-hole','e-hole'],['p-ecc','e-ecc']].forEach(([ps,es])=>{
@@ -501,8 +511,10 @@ I('lang-zh').addEventListener('click',()=>applyLang('zh'));
 // ============================ in-browser optimizer: NSGA-II in a Web Worker ============================
 const OPT = { front:[], sel:-1, running:false, ran:false, pts:[], worker:null };
 function stopWorker(){ if(OPT.worker){ OPT.worker.terminate(); OPT.worker=null; } }
+// single write-path for the optimizer verdict — the tool's most important line gets a semantic colour
+function setOptStat(msg,cls){ const el=I('opt-stat'); el.textContent=msg; el.className='optstat'+(cls?' '+cls:''); }
 function invalidateOpt(){ if(!OPT.ran) return; stopWorker(); OPT.running=false; OPT.front=[]; OPT.sel=-1;
-  const b=I('opt-run'); b.disabled=false; b.textContent=t('opt_run'); I('opt-stat').textContent=t('opt_stale'); I('opt-pick').innerHTML=''; drawOptPlot(); }
+  const b=I('opt-run'); b.disabled=false; b.textContent=t('opt_run'); setOptStat(t('opt_stale'),'warn'); I('opt-pick').innerHTML=''; drawOptPlot(); }
 function runOptimize(){
   if(OPT.running) return;
   OPT.running=true; OPT.ran=true; OPT.front=[]; OPT.sel=-1; I('opt-pick').innerHTML='';
@@ -511,14 +523,16 @@ function runOptimize(){
   const wk=new Worker('worker.js',{type:'module'});
   OPT.worker=wk;
   wk.onmessage=(e)=>{
-    const m=e.data; OPT.front=m.front||[];
-    if(m.type==='progress'){ I('opt-stat').textContent=`${m.pct}%  ·  ${OPT.front.length}`; drawOptPlot(); return; }
+    const m=e.data;
+    if(m.type==='log'){ console.log('[optimizer]', m.msg); return; }
+    OPT.front=m.front||[];
+    if(m.type==='progress'){ setOptStat(t('opt_prog').replace('{p}',m.pct).replace('{n}',OPT.front.length),'busy'); drawOptPlot(); return; }
     OPT.running=false; btn.disabled=false; btn.textContent=t('opt_run'); stopWorker();
-    if(OPT.front.length){ applyGoalPick(true); } else { I('opt-stat').textContent=t('opt_none'); }
+    if(OPT.front.length){ applyGoalPick(true); } else { setOptStat(t('opt_none'),'err'); }
     drawOptPlot();
   };
   wk.onerror=(err)=>{ OPT.running=false; btn.disabled=false; btn.textContent=t('opt_run'); stopWorker();
-    I('opt-stat').textContent='optimizer error (see console)'; console.error(err); };
+    setOptStat(t('opt_err'),'err'); console.error(err); };
   // seed the search with known-good designs so the big 5-parameter space converges reliably at the
   // low-backlash / high-stiffness corner: the presets, the current design, and an offset sweep.
   const SEEDS=[];
@@ -535,19 +549,20 @@ function runOptimize(){
 // ponytail: the MC runs only on the picked design (front-wide MC would cost ~2 s for little gain).
 function applyGoalPick(autoload){
   if(!OPT.front.length) return;
-  // THE best curve: backlash is the user's #1 priority, so pick lexicographically — take essentially the
-  // minimum backlash (within 0.5′ of the best on the front), then the smoothest / lowest-ripple among those.
-  // The front is already feasible + manufacturable (GA constraints) and comes from the archive of the best
-  // designs ever found, so this never returns worse backlash than the seeded GA-optimum preset.
+  // THE best curve, lexicographic: essentially-minimum backlash (within 0.5′ of the front's best) →
+  // smoothest among those (ripple within 10% of the best) → then the STIFFEST of that set, so a
+  // meaningless 0.01 µrad ripple digit can no longer throw away 3× the torsional stiffness.
   const F=OPT.front, blMin=Math.min(...F.map(d=>d.backlash));
   const near=F.filter(d=>d.backlash<=blMin+0.5);
-  OPT.sel = F.indexOf(near.reduce((a,b)=>b.ripple<a.ripple?b:a));
+  const ripMin=Math.min(...near.map(d=>d.ripple));
+  const smooth=near.filter(d=>d.ripple<=ripMin*1.1+1e-9);
+  OPT.sel = F.indexOf(smooth.reduce((a,b)=>b.stiff>a.stiff?b:a));
   const d=F[OPT.sel];
   if(autoload){ state.offset=d.offset; state.coeffs=d.coeffs.slice(); afterChange(); }
   const eta=evaluate(d.offset,d.coeffs).eta;   // efficiency is main-thread only
-  I('opt-stat').textContent = t('opt_result')
+  setOptStat(t('opt_result')
     .replace('{b}', d.backlash.toFixed(2)).replace('{a}', d.blmax!=null?d.blmax.toFixed(1):'—')
-    .replace('{r}', d.ripple.toFixed(1)).replace('{e}', (eta*100).toFixed(1));
+    .replace('{r}', d.ripple.toFixed(1)).replace('{e}', (eta*100).toFixed(1)), 'ok');
   showPick();
 }
 function showPick(){
@@ -570,8 +585,10 @@ function showPick(){
 const VIRID=[[253,231,37],[94,201,98],[33,145,140],[59,82,139],[68,1,84]];
 function optColor(tt){ tt=Math.max(0,Math.min(1,tt)); const x=tt*4,i=Math.floor(x),f=x-i,a=VIRID[i],b=VIRID[Math.min(i+1,4)]; return `rgb(${a[0]+(b[0]-a[0])*f|0},${a[1]+(b[1]-a[1])*f|0},${a[2]+(b[2]-a[2])*f|0})`; }
 function drawOptPlot(){
+  const F=OPT.front;
+  I('optpanel').classList.toggle('optempty', !OPT.running && !F.length);   // pre-run / stale: ghost hint, no 430px void
   const {ctx,w,h}=fit(I('optplot')); ctx.clearRect(0,0,w,h);
-  const F=OPT.front, padL=48,padR=12,padT=12,padB=34;
+  const padL=48,padR=12,padT=12,padB=34;
   if(!F.length){ ctx.fillStyle=COL['ink-3']; ctx.font='13px '+css('--mono'); ctx.textAlign='center';
     ctx.fillText(OPT.running?'…':'—', w/2, h/2); OPT.pts=[]; return; }
   const B=F.map(d=>d.backlash), S=F.map(d=>d.stiff), P=F.map(d=>d.maxPA);
@@ -604,6 +621,8 @@ function loop(tm){
 window.addEventListener('resize',()=>{ drawMesh(); drawTooth(); drawClearance(); drawOptPlot(); });
 
 // ============================ init ============================
+// wire every field label to its control (click-to-focus + accessible names) — ids already exist
+document.querySelectorAll('.field').forEach(f=>{ const inp=f.querySelector('select,input'), lab=f.querySelector('label'); if(inp&&lab&&inp.id) lab.htmlFor=inp.id; });
 applyGeometry();      // sets ROT_SIGN, PINS, BASE, meshProf via afterChange
 applyLang('en');
 refreshExport();
@@ -612,6 +631,6 @@ if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').m
   state.playing=false; I('play').textContent=playLabel(); I('play').setAttribute('aria-pressed','false');
 }
 drawMesh();
-I('opt-stat').textContent=t('opt_hint');
+setOptStat(t('opt_hint'));
 drawOptPlot();
 requestAnimationFrame(loop);

@@ -4,12 +4,17 @@ let T_RATED=30.0;
 // prof = flank form error, pin = pin diameter, hole = pin-hole true position, ecc = eccentricity.
 let ERR={prof:4, pin:2, hole:4, ecc:3};
 let SENS_E=1.5;   // worst |∂gap/∂E| over pins+cranks — finite-differenced by mcYield(), not assumed
-const dwc=()=>(ERR.prof+ERR.pin/2+ERR.hole+SENS_E*ERR.ecc)/1000;  // worst-case gap tightening [mm]  (pin is a Ø tol → only half lands on the radial gap)
+// worst-case gap tightening [mm] (pin is a Ø tol → only half lands on the radial gap). With an
+// adjustable eccentric the per-unit E dial absorbs the eccentricity error entirely, so it leaves the
+// worst-case band (pin/2 stays: common-mode Ø error is only partially dialable through the non-uniform
+// ∂gap/∂E field). This is the band the GA constrains on — matched assembly unlocks tighter designs.
+const dwc=()=>((ERR.prof+ERR.pin/2+ERR.hole)+(A_ADJ?0:SENS_E*ERR.ecc))/1000;
 let L_TOOTH=10.0, C_BEAR=0.0, C_OUT=0.0;   // disk thickness [mm]; input-bearing & output-coupling radial clearance [mm] (opt-in)
 // output pin-hole (W) stage + eccentric-bearing life. R_W = output pin-circle radius, Z_W = output pins,
 // RW_PIN = output-pin/roller radius [mm]; C_BRG = eccentric-bearing dynamic capacity C [N]; N_IN = input speed [rpm] (0 ⇒ report revs only).
 let R_W=20.0, Z_W=8, RW_PIN=3.0, C_BRG=10000.0, N_IN=0.0;
-let OUT={k:Infinity,bl:0,sigma:0,safety:Infinity,neng:0};   // output-stage results — geometry-only (profile-independent), cached per geometry/spec change
+let O_ROLL=false;   // rollers on the output pins: sliding contact → rolling, ~10× less output-stage friction loss
+let OUT={k:Infinity,bl:0,sigma:0,safety:Infinity,neng:0,sumF:0,ploss:0};   // output-stage results — geometry-only (profile-independent), cached per geometry/spec change
 // thermal-drift: only the housing↔disc CTE MISMATCH moves clearance — uniform expansion is a similarity
 // transform (angular backlash invariant). DELTA_T = operating rise [°C]; CTE_H/CTE_D = housing/disc CTE [1/K].
 let DELTA_T=0.0, CTE_H=23.0e-6, CTE_D=11.5e-6;
@@ -17,7 +22,8 @@ let MU_MESH=0.06;   // boundary/EP-grease friction coeff at pin contacts → mes
 let N_DISC=1;       // number of phased cycloid discs (1/2/3) — phased superposition cancels TE-ripple harmonics not a multiple of N_DISC
 let R_TOOL=0.1;     // finishing tool radius [mm] (wire-EDM wire ~0.1, form-grinding wheel 0.5–3) — min concave flank radius must exceed it
 let A_ADJ=false;    // adjustable eccentric / matched assembly: dial E per unit at assembly to null backlash (removes nominal clearance + common-mode + ecc error; residual = per-pin independent + crank non-uniformity)
-const K_CONTACT=5.0e4;
+let K_CONTACT=5.0e4;   // per-tooth contact stiffness [N/mm] — line contact scales ~linearly with contact
+                       // length, so configure() sets K=5e3·L_TOOTH (the 50 N/µm calibration point is the 10 mm default)
 const ESTAR=115385.0, SH_LIM=1500.0;   // steel-steel Hertz E* [MPa] (1/E*=2(1-0.3²)/210000); contact-fatigue limit [MPa]
 let ROT_SIGN=-1.0, GEOM_WORST=0;
 let PINS=[];
@@ -56,7 +62,19 @@ function meshState(prof,psi,rot){
   for(let j=0;j<Np;j++){
     const px=PINS[j][0], py=PINS[j][1]; let best=Infinity, bi=0;
     for(let i=0;i<n;i++){ const dd=(WX[i]-px)**2+(WY[i]-py)**2; if(dd<best){best=dd; bi=i;} }
-    const wx=WX[bi], wy=WY[bi], dist=Math.hypot(wx-px,wy-py);
+    // sub-sample refinement: parabola through the squared distances at bi−1/bi/bi+1 gives the fractional
+    // contact position (2nd-order Taylor of the curve) — kills the ~(Δs)²/8Rr grid-quantisation error,
+    // so the 1800-pt GA estimator and the 8000-pt panel agree instead of ranking inside grid noise.
+    const im=(bi-1+n)%n, ip=(bi+1)%n;
+    const dm=(WX[im]-px)**2+(WY[im]-py)**2, dp=(WX[ip]-px)**2+(WY[ip]-py)**2;
+    const den=dm-2*best+dp;
+    const tf=den>1e-18? Math.max(-0.5,Math.min(0.5,0.5*(dm-dp)/den)) : 0;
+    const wxr=WX[bi]+tf*0.5*(WX[ip]-WX[im])+0.5*tf*tf*(WX[ip]-2*WX[bi]+WX[im]);
+    const wyr=WY[bi]+tf*0.5*(WY[ip]-WY[im])+0.5*tf*tf*(WY[ip]-2*WY[bi]+WY[im]);
+    // guard: the true foot is never FARTHER than the nearest sample — a larger refined distance means the
+    // quadratic model broke (near-osculating conjugate contact makes d²(t) quartic-flat) → keep the sample.
+    const dr2=(wxr-px)**2+(wyr-py)**2, use=dr2<=best;
+    const wx=use?wxr:WX[bi], wy=use?wyr:WY[bi], dist=Math.sqrt(use?dr2:best);
     gaps.push(dist-Rr);
     const nxj=(px-wx)/dist, nyj=(py-wy)/dist;
     arms.push((wx-cx)*nyj-(wy-cy)*nxj); cnx.push(nxj); cny.push(nyj);   // cn = contact normal (pin→flank) for the bearing-reaction resultant
@@ -90,10 +108,11 @@ function playRange(gaps,arms,tol=0){
     if(aa>1e-9) hi=Math.min(hi,g/aa); else if(aa<-1e-9) lo=Math.max(lo,g/aa); }
   return [lo,hi];
 }
-function windup(gaps,arms){
+function windup(gaps,arms,Tnm){
   // returns absolute loaded output angle b (rad, from ideal conjugate pose); ptp(b) over a
   // mesh cycle is the true loaded transmission error. b = clearance take-up hi + elastic strain.
-  const T=T_RATED*1000.0, hi=playRange(gaps,arms)[1];
+  // Tnm [N·m] optional — callers pass T_RATED/N_DISC so each phased disc carries its share.
+  const T=(Tnm===undefined?T_RATED:Tnm)*1000.0, hi=playRange(gaps,arms)[1];
   const torque=b=>{let s=0;for(let j=0;j<gaps.length;j++){const p=Math.max(0,b*arms[j]-gaps[j]);s+=K_CONTACT*p*arms[j];}return s;};
   let b1=hi+1e-6;
   while(torque(b1)<T){ b1=hi+2*(b1-hi); if(b1-hi>0.05) return {b:(isFinite(hi)?hi:0)+0.05,k:0,ne:0,F:gaps.map(()=>0)}; }
@@ -109,18 +128,25 @@ function windup(gaps,arms){
 // mesh — uniform gap C_OUT, moment arm R_W·sin(φ−ψ_j) so only ~half the pins carry a given torque direction.
 // Profile-independent (geometry only) ⇒ solved once per geometry/spec change and cached in OUT.
 function rebuildOutStage(){
-  if(!(Z_W>=1)||!(R_W>0)){ OUT={k:Infinity,bl:0,sigma:0,safety:Infinity,neng:0}; return; }
+  if(!(Z_W>=1)||!(R_W>0)){ OUT={k:Infinity,bl:0,sigma:0,safety:Infinity,neng:0,sumF:0,ploss:0}; return; }
   const arcmin=180/Math.PI*60, invre=Math.abs(1/RW_PIN-1/(RW_PIN+E));   // conforming pin-in-hole line contact (concave ⇒ low stress)
   const cvec=new Array(Z_W).fill(invre);
-  let kmin=Infinity, blmax=0, smax=0, nmin=Z_W;
+  let kmin=Infinity, blmax=0, smax=0, nmin=Z_W, sF=0;
   for(let i=0;i<24;i++){
     const phi=2*Math.PI/Z_W*i/24, gaps=new Array(Z_W), arms=new Array(Z_W);
     for(let j=0;j<Z_W;j++){ arms[j]=R_W*Math.sin(phi-2*Math.PI*j/Z_W); gaps[j]=C_OUT; }
     const [lo,hi]=playRange(gaps,arms); if(hi-lo>blmax)blmax=hi-lo;
-    const w=windup(gaps,arms); if(w.k<kmin)kmin=w.k; if(w.ne<nmin)nmin=w.ne;
+    const w=windup(gaps,arms,T_RATED/N_DISC); if(w.k<kmin)kmin=w.k; if(w.ne<nmin)nmin=w.ne;
     const s=hertzMaxMPa(w.F,cvec); if(s>smax)smax=s;
+    let s2=0; for(let j=0;j<Z_W;j++) s2+=w.F[j]; sF+=s2;
   }
-  OUT={ k:kmin/1e3/arcmin, bl:blmax, sigma:smax, safety:(smax>1e-9?SH_LIM/smax:Infinity), neng:nmin };
+  // per-disc results (each disc has its own hole set, carrying T/N_DISC above). sumF = phase-mean total
+  // pin force; the pin-in-hole contact is FULLY sliding (disc motion relative to the flange is a circular
+  // translation of radius E), slip speed E·(1+1/N) per unit ω_in — the loss the mesh-only η was missing.
+  // Rollers on the output pins turn that sliding into rolling (~10× less loss).
+  const vSlide=E*(1+1/N);
+  OUT={ k:kmin/1e3/arcmin, bl:blmax, sigma:smax, safety:(smax>1e-9?SH_LIM/smax:Infinity), neng:nmin,
+        sumF:sF/24, ploss:(O_ROLL?0.1:1)*MU_MESH*(sF/24)*vSlide };
 }
 // Manufacturability / validity of the modified flank: min radius of curvature over the CONCAVE (valley)
 // regions a finishing wheel must enter (must exceed the tool radius), and a self-intersection/cusp check —
@@ -151,7 +177,7 @@ function phasedPtp(bs, nd){
 function evaluate(offset,coeffs,nPts,variant){
   nPts=nPts||8000;   // match Python NTH so the nearest-point search agrees to the displayed digit
   const prof=profile(offset,coeffs,nPts,variant), arcmin=180/Math.PI*60;
-  const DW=dwc(), TS=[ERR.prof/1e3, ERR.pin/2e3, ERR.hole/1e3, SENS_E*ERR.ecc/1e3];   // pin: Ø-band → radius
+  const DW=dwc(), TS=[ERR.prof/1e3, ERR.pin/2e3, ERR.hole/1e3, A_ADJ?0:SENS_E*ERR.ecc/1e3];   // pin: Ø-band → radius; ecc absorbed by the per-unit E dial
   const plays=[],rmargins=[],blmaxs=[],ks=[],bs=[],nes=[], bud=[0,0,0,0]; let sigMax=0, Psum=0, plossSum=0, vsMax=0, pvMax=0;
   const P_EXP=10/3;   // roller-bearing life exponent (ISO 281)
   for(let i=0;i<48;i++){   // 48 crank samples over one mesh cycle to resolve the TE ripple
@@ -162,10 +188,14 @@ function evaluate(offset,coeffs,nPts,variant){
     const [tlo,thi]=playRange(ms.gaps,ms.arms,DW); rmargins.push(thi-tlo);
     const [llo,lhi]=playRange(ms.gaps,ms.arms,-DW); blmaxs.push(lhi-llo);
     for(let s=0;s<4;s++){ const pr=playRange(ms.gaps,ms.arms,-TS[s]), wd=pr[1]-pr[0]; if(wd>bud[s])bud[s]=wd; }
-    const w=windup(ms.gaps,ms.arms); ks.push(w.k); bs.push(w.b); nes.push(w.ne);
+    const w=windup(ms.gaps,ms.arms,T_RATED/N_DISC); ks.push(w.k); bs.push(w.b); nes.push(w.ne);   // each phased disc carries its share
     const s=hertzMaxMPa(w.F,ms.invre); if(s>sigMax)sigMax=s;   // durability: stress on the loaded contacts
-    // eccentric-bearing radial load = vector sum of the mesh contact forces (mesh-reaction only; dominant term)
+    // eccentric-bearing radial load: mesh-contact vector sum PLUS the output-pin reaction. All output
+    // pin-in-hole contacts push the disc along the crank throw +(cosψ,sinψ) (hole orbits the pin at radius
+    // E, so every contact normal lies on the line of centres), magnitude OUT.sumF — comparable to the mesh
+    // resultant and near-orthogonal to it. Sign verified by disc force/moment balance (verify_round3).
     let Rx=0,Ry=0; for(let j=0;j<Np;j++){ Rx+=w.F[j]*ms.cnx[j]; Ry+=w.F[j]*ms.cny[j]; }
+    Rx-=OUT.sumF*Math.cos(psi); Ry-=OUT.sumF*Math.sin(psi);
     Psum+=Math.pow(Math.hypot(Rx,Ry),P_EXP);
     // sliding kernel: contact slip v_s = |V_disc·tangent|, V_disc = V_center + ω_disc(=−1/N)×r_c  (per unit ω_in).
     // Feeds mesh friction loss (efficiency) and the PV = σ·v_s wear/scuffing driver. Speed cancels in η.
@@ -182,16 +212,19 @@ function evaluate(offset,coeffs,nPts,variant){
   // each a first-order output-referred angular deadband (bearing lumped as C_BEAR/Rb).
   const backlash=Math.max(...plays)*arcmin;
   const sysLM=(Math.max(...plays) + C_BEAR/Rb + OUT.bl)*arcmin;
+  // per-disc series chain (mesh ⊕ output pin-hole), then N_DISC discs act in parallel — both stages were
+  // solved at T/N_DISC so multiplying the combined stiffness by N_DISC is the exact parallel composition.
   const kmesh=Math.min(...ks)/1e3/arcmin;
-  const stiff=(OUT.k>0&&isFinite(OUT.k))? 1/(1/kmesh+1/OUT.k) : kmesh;   // series: mesh ⊕ output pin-hole (support bearings excluded)
+  const stiff=((OUT.k>0&&isFinite(OUT.k))? 1/(1/kmesh+1/OUT.k) : kmesh)*N_DISC;   // support bearings excluded
   const Peq=Math.pow(Psum/48,1/P_EXP);   // ISO 281 equivalent dynamic load for the varying cyclic load
-  const L10rev=Math.pow(C_BRG/Math.max(Peq,1e-6),P_EXP)*1e6;
+  // each disc has its own eccentric bearing at per-disc load; N_DISC bearings in series life-wise (Weibull β=10/9)
+  const L10rev=Math.pow(C_BRG/Math.max(Peq,1e-6),P_EXP)*1e6/Math.pow(N_DISC,0.9);
   const Pout=T_RATED*1000/N;                       // output power per unit ω_in [N·mm/rad]
-  const eta=Pout/(Pout+plossSum/48);               // cycle-mean mesh efficiency (mesh sliding only; ω_in cancels)
+  const eta=Pout/(Pout+N_DISC*(plossSum/48+OUT.ploss));   // sliding loss: mesh + output pin-hole, ×N_DISC discs (ω_in cancels)
   const etaBd=eta>0.5? 2-1/eta : 0;                // standard backdrive relation (η_bd = 2 − 1/η_fwd)
   return { backlash, blmax:Math.max(...blmaxs)*arcmin,
            budget:bud.map(v=>Math.max(0,v*arcmin-backlash)),   // each source's worst-case backlash adder [′]
-           stiff, stiffMesh:kmesh,
+           stiff, stiffMesh:kmesh*N_DISC,
            ripple:phasedPtp(bs,N_DISC)*1e6,
            rmargin:Math.min(...rmargins)*arcmin, n_eng:Math.min(...nes),
            sigmaH:sigMax, safety:(sigMax>1e-9?SH_LIM/sigMax:Infinity), sysLM,
@@ -244,7 +277,7 @@ function preloadReport(offset,coeffs){
     }
     if(k<kmin)kmin=k; if(td>drag)drag=td;
   }
-  return { pmin:pmin*1e3, kNoLoad:(isFinite(kmin)?kmin:0)/1e3/arcmin, drag:drag/1000, thOpen:thOpen*1e3 };
+  return { pmin:pmin*1e3, kNoLoad:(isFinite(kmin)?kmin:0)*N_DISC/1e3/arcmin, drag:drag*N_DISC/1000, thOpen:thOpen*1e3 };   // N_DISC preloaded discs in parallel
 }
 // Monte-Carlo as-built prediction: sample every manufacturing-error source over its ± band, rebuild
 // the gap field, and read off the backlash distribution + jam risk of the units you'd actually make.
@@ -343,12 +376,13 @@ function configure(o){
   if('N' in o){ N=o.N; M=N+1; Np=N+1; }
   if('T_RATED' in o) T_RATED=o.T_RATED;
   if('ERR' in o) ERR=o.ERR;
-  if('L_TOOTH' in o) L_TOOTH=o.L_TOOTH;
+  if('L_TOOTH' in o){ L_TOOTH=o.L_TOOTH; K_CONTACT=5e3*L_TOOTH; }
   if('C_BEAR' in o) C_BEAR=o.C_BEAR;
   if('C_OUT' in o) C_OUT=o.C_OUT;
   if('R_W' in o) R_W=o.R_W;
   if('Z_W' in o) Z_W=o.Z_W;
   if('RW_PIN' in o) RW_PIN=o.RW_PIN;
+  if('O_ROLL' in o) O_ROLL=o.O_ROLL;
   if('C_BRG' in o) C_BRG=o.C_BRG;
   if('N_IN' in o) N_IN=o.N_IN;
   if('DELTA_T' in o) DELTA_T=o.DELTA_T;
@@ -361,5 +395,5 @@ function configure(o){
   if('ROT_SIGN' in o) ROT_SIGN=o.ROT_SIGN;
   if('PINS' in o) PINS=o.PINS;
 }
-function getState(){ return {Rb,Rr,E,N,M,Np,T_RATED,ERR,SENS_E,L_TOOTH,C_BEAR,C_OUT,R_W,Z_W,RW_PIN,C_BRG,N_IN,OUT,DELTA_T,CTE_H,CTE_D,MU_MESH,N_DISC,R_TOOL,A_ADJ,ROT_SIGN,GEOM_WORST,PINS,K_CONTACT,ESTAR,SH_LIM}; }
+function getState(){ return {Rb,Rr,E,N,M,Np,T_RATED,ERR,SENS_E,L_TOOTH,C_BEAR,C_OUT,R_W,Z_W,RW_PIN,C_BRG,N_IN,O_ROLL,OUT,DELTA_T,CTE_H,CTE_D,MU_MESH,N_DISC,R_TOOL,A_ADJ,ROT_SIGN,GEOM_WORST,PINS,K_CONTACT,ESTAR,SH_LIM}; }
 export { profile, meshState, contactInvRe, hertzMaxMPa, playRange, windup, rebuildOutStage, phasedPtp, profileHealth, evaluate, mulberry32, mcBuildBase, mcSample, mcYield, sobolShutoff, thermalDrift, preloadReport, pickRotSign, rebuildPins, dwc, configure, getState };

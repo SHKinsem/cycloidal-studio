@@ -1,7 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cycloidal Shape Designer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6.5' fill='none' stroke='%2322b892' stroke-width='3'/></svg>">
 <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<noscript>This tool runs entirely in your browser and needs JavaScript enabled. / 本工具完全在浏览器内运行，需要启用 JavaScript。</noscript>
 <div class="wrap">
   <header>
     <div class="topbar">
@@ -45,7 +52,8 @@
       <div class="field"><label><span data-i18n="lbl_mu">friction µ</span></label><input id="g-mu" type="number" value="0.06" min="0.01" max="0.2" step="0.01"></div>
       <div class="field"><label><span data-i18n="lbl_ndisc">discs (phased)</span></label><input id="g-ndisc" type="number" value="1" min="1" max="3" step="1"></div>
       <div class="field"><label><span data-i18n="lbl_rtool">tool radius</span> <span class="unit">mm</span></label><input id="g-rtool" type="number" value="0.1" min="0.02" max="5" step="0.05"></div>
-      <div class="field"><label><span data-i18n="lbl_adje">adjustable ecc</span> <span class="unit" data-i18n="adje_unit">matched assy</span></label><input id="g-adje" type="checkbox" style="width:auto;height:20px;margin-top:7px;accent-color:var(--green);"></div>
+      <div class="field"><label><span data-i18n="lbl_adje">adjustable ecc</span> <span class="unit" data-i18n="adje_unit">matched assy</span></label><input id="g-adje" type="checkbox"></div>
+      <div class="field"><label><span data-i18n="lbl_orol">output rollers</span> <span class="unit" data-i18n="orol_unit">rolling</span></label><input id="g-orol" type="checkbox"></div>
       </div>
     </details>
     <div class="mfg">
@@ -145,7 +153,7 @@
         <div class="metric"><span class="k"><span data-i18n="m_backlash">backlash</span><small data-i18n="sub_backlash">zero-error ideal, mesh only</small></span><span class="v" id="m-backlash"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_asbuilt">as-built backlash</span><small data-i18n="sub_asbuilt">Monte-Carlo over your plan · typical–95%</small></span><span class="v" id="m-asbuilt"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_ripple">ripple</span><small data-i18n="sub_ripple">wind-up variation = smoothness</small></span><span class="v" id="m-ripple"></span></div>
-        <div class="metric"><span class="k"><span data-i18n="m_eff">mesh efficiency</span><small data-i18n="sub_eff">sliding loss · fwd / backdrive · excl. bearings-seals</small></span><span class="v" id="m-eff"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_eff">mesh efficiency</span><small data-i18n="sub_eff">sliding loss · mesh + output pins · fwd / backdrive</small></span><span class="v" id="m-eff"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_stiff">stiffness</span><small data-i18n="sub_stiff">torsional, worst crank angle</small></span><span class="v" id="m-stiff"></span></div>
       </div>
       <details class="advset">
@@ -157,7 +165,7 @@
         <div class="metric"><span class="k"><span data-i18n="m_rmargin">worst-case margin</span><small data-i18n="sub_rmargin">every error at its tightest — &gt;0 still assembles</small></span><span class="v" id="m-rmargin"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_teeth">loaded teeth</span><small data-i18n="sub_teeth">sharing the rated torque</small></span><span class="v" id="m-teeth"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_ostress">output-pin stress</span><small data-i18n="sub_ostress">Hertz on output pins · safety</small></span><span class="v" id="m-ostress"></span></div>
-        <div class="metric"><span class="k"><span data-i18n="m_life">bearing life</span><small data-i18n="sub_life">eccentric-bearing L10 · mesh reaction only</small></span><span class="v" id="m-life"></span></div>
+        <div class="metric"><span class="k"><span data-i18n="m_life">bearing life</span><small data-i18n="sub_life">eccentric-bearing L10 · mesh + output reaction</small></span><span class="v" id="m-life"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_thermal">thermal drift</span><small data-i18n="sub_thermal">backlash at ΔT · housing↔gear CTE mismatch</small></span><span class="v" id="m-thermal"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_wear">sliding / wear</span><small data-i18n="sub_wear">peak slip · PV scuffing-wear index</small></span><span class="v" id="m-wear"></span></div>
         <div class="metric"><span class="k"><span data-i18n="m_preload">preload for zero backlash</span><small data-i18n="sub_preload">min interference · no-load stiffness · drag</small></span><span class="v" id="m-preload"></span></div>
@@ -189,18 +197,21 @@
     </div>
 
     <!-- optimize (live, this geometry) -->
-    <div class="panel full">
+    <div class="panel full" id="optpanel">
       <h2><span data-i18n="opt_h">Optimize for this geometry</span> <span class="aux" data-i18n="opt_sub">live multi-objective search in your browser</span></h2>
       <div class="optbar">
         <button id="opt-run" class="optbtn" data-i18n="opt_run">◆ Find optimal modifications</button>
-        <span class="optstat" id="opt-stat">Set your geometry above, then search. Click a point to load it into the sliders.</span>
+        <span class="optstat" id="opt-stat" aria-live="polite"></span>
       </div>
-      <div class="optgrid">
-        <canvas id="optplot"></canvas>
-        <div class="optpick" id="opt-pick"></div>
-      </div>
-      <div class="legend">
-        <span><i class="swatch" style="background:var(--green)"></i><span data-i18n="opt_lg">non-dominated designs (backlash ↔ stiffness, colour = pressure angle)</span></span>
+      <div class="optghost" data-i18n="opt_ghost">run once to see the design front</div>
+      <div id="optbody">
+        <div class="optgrid">
+          <canvas id="optplot"></canvas>
+          <div class="optpick" id="opt-pick"></div>
+        </div>
+        <div class="legend">
+          <span><i class="swatch" style="background:var(--green)"></i><span data-i18n="opt_lg">non-dominated designs (backlash ↔ stiffness, colour = pressure angle)</span></span>
+        </div>
       </div>
     </div>
 
@@ -225,3 +236,5 @@
   </footer>
 </div>
 <script type="module" src="app.js"></script>
+</body>
+</html>
