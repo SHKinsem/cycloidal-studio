@@ -4,7 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cycloidal Shape Designer</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6.5' fill='none' stroke='%2322b892' stroke-width='3'/></svg>">
+<meta name="theme-color" content="#14294d">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%23163361'/><circle cx='8' cy='8' r='5' fill='none' stroke='%23eef4fd' stroke-width='2'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Semi+Condensed:wght@600;700&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -201,7 +205,7 @@
       <h2><span data-i18n="tooth_h">Tooth flank</span> <span class="aux"><span data-i18n="tooth_aux">one tooth · modification</span> ×40</span><button class="pin" type="button"></button></h2>
       <canvas id="tooth"></canvas>
       <div class="legend">
-        <span><i class="swatch" style="background:#8b96a6"></i><span data-i18n="lg_unmod">unmodified (pure conjugate)</span></span>
+        <span><i class="swatch" style="background:#7e97bd"></i><span data-i18n="lg_unmod">unmodified (pure conjugate)</span></span>
         <span><i class="swatch" style="background:var(--green)"></i><span data-i18n="lg_mod">modified flank</span></span>
       </div>
     </div>
@@ -234,7 +238,16 @@
   </div>
 
   <footer>
-    <span data-i18n="footer_read"></span>
+    <div class="tblock">
+      <div class="tb wide"><span class="tb-k">Title · 图名</span><span class="tb-v">Cycloidal disc — tooth profile</span></div>
+      <div class="tb"><span class="tb-k">Dwg No · 图号</span><span class="tb-v">RM26-CYC-01</span></div>
+      <div class="tb"><span class="tb-k">Ratio · 速比</span><span class="tb-v" id="tb-ratio">—</span></div>
+      <div class="tb"><span class="tb-k">Units · 单位</span><span class="tb-v">mm</span></div>
+      <div class="tb"><span class="tb-k">Scale · 比例</span><span class="tb-v">param</span></div>
+      <div class="tb"><span class="tb-k">Sheet · 页</span><span class="tb-v">1 / 1</span></div>
+      <div class="tb"><span class="tb-k">Date · 日期</span><span class="tb-v" id="tb-date">—</span></div>
+    </div>
+    <p class="read"><span data-i18n="footer_read"></span></p>
     <div class="note" data-i18n="footer_note"></div>
   </footer>
 </div>

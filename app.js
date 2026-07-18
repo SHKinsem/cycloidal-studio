@@ -218,14 +218,14 @@ function drawMesh(){
   const ms=meshState(meshProf,state.psi), wnd=windup(ms.gaps,ms.arms), Fmax=Math.max(1e-9,...wnd.F);
   for(let j=0;j<Np;j++){
     const [px,py]=PINS[j], f=wnd.F[j]/Fmax;
-    if(f>0.02){ ctx.beginPath(); ctx.arc(toX(px),toY(py),Rr*sc+7,0,2*Math.PI); ctx.fillStyle=`rgba(250,178,25,${0.05+0.22*f})`; ctx.fill(); }
+    if(f>0.02){ ctx.beginPath(); ctx.arc(toX(px),toY(py),Rr*sc+7,0,2*Math.PI); ctx.fillStyle=`rgba(255,193,79,${0.05+0.22*f})`; ctx.fill(); }
     ctx.beginPath(); ctx.arc(toX(px),toY(py),Rr*sc,0,2*Math.PI);
     ctx.strokeStyle= f>0.02 ? COL.hot : COL.steel; ctx.lineWidth= f>0.02?1.6:1; ctx.stroke();
   }
   const {X,Y}=meshProf, co=Math.cos(ms.rot), si=Math.sin(ms.rot);
   ctx.beginPath();
   for(let i=0;i<X.length;i++){ const wx=co*X[i]-si*Y[i]+ms.cx, wy=si*X[i]+co*Y[i]+ms.cy; const sx=toX(wx), sy=toY(wy); i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy); }
-  ctx.closePath(); ctx.fillStyle='rgba(34,184,146,0.07)'; ctx.fill(); ctx.strokeStyle=COL.green; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.closePath(); ctx.fillStyle='rgba(242,247,255,0.06)'; ctx.fill(); ctx.strokeStyle=COL.green; ctx.lineWidth=1.5; ctx.stroke();
   ctx.strokeStyle=COL['line-2']; ctx.lineWidth=1;
   ctx.beginPath(); ctx.moveTo(toX(0),toY(0)); ctx.lineTo(toX(ms.cx),toY(ms.cy)); ctx.stroke();
   ctx.beginPath(); ctx.arc(toX(ms.cx),toY(ms.cy),3,0,2*Math.PI); ctx.fillStyle=COL.ink; ctx.fill();
@@ -258,9 +258,9 @@ function drawTooth(){
   ctx.beginPath();
   for(let k=0;k<bx.length;k++){ const x=X(bx[k]),y=Y(by[k]); k?ctx.lineTo(x,y):ctx.moveTo(x,y); }
   for(let k=mx.length-1;k>=0;k--){ ctx.lineTo(X(mx[k]),Y(my[k])); }
-  ctx.closePath(); ctx.fillStyle='rgba(34,184,146,0.10)'; ctx.fill();
+  ctx.closePath(); ctx.fillStyle='rgba(242,247,255,0.08)'; ctx.fill();
   const stroke=(XS,YS,c,wd)=>{ ctx.beginPath(); for(let k=0;k<XS.length;k++){const x=X(XS[k]),y=Y(YS[k]); k?ctx.lineTo(x,y):ctx.moveTo(x,y);} ctx.strokeStyle=c; ctx.lineWidth=wd; ctx.stroke(); };
-  stroke(bx,by,'#8b96a6',1.6); stroke(mx,my,COL.green,2.2);
+  stroke(bx,by,'#7e97bd',1.6); stroke(mx,my,COL.green,2.2);
   ctx.fillStyle=COL['ink-3']; ctx.font='13px '+MONO; ctx.textAlign='center';
   ctx.fillText(t('c_root'), X(bx[6]), Y(by[6])+16);
   ctx.fillText(t('c_tip'), X(bx[Math.round(nS/2)]), Y(by[Math.round(nS/2)])-13);
@@ -433,6 +433,7 @@ function applyGeometry(){
   I('warn').classList.toggle('on', getState().GEOM_WORST>0.003);
   BASE=evaluate(-0.075,[0.05],8000,'pertooth');
   I('ratio').textContent=t('mesh_aux').replace('{R}', getState().N);
+  I('tb-ratio').textContent=getState().N+' : 1';
   invalidateOpt();      // the current front was for the old geometry
   afterChange();
 }
@@ -595,7 +596,7 @@ function showPick(){
     `<button class="load" id="opt-load">${t('opt_load')}</button>`;
   I('opt-load').onclick=()=>{ state.offset=d.offset; state.coeffs=d.coeffs.slice(); afterChange(); };
 }
-const VIRID=[[253,231,37],[94,201,98],[33,145,140],[59,82,139],[68,1,84]];
+const VIRID=[[238,244,253],[255,209,102],[255,159,90],[255,111,97],[201,60,64]];   // paper-white → amber → redline: reads as "pressure-angle heat" on the blueprint ground
 function optColor(tt){ tt=Math.max(0,Math.min(1,tt)); const x=tt*4,i=Math.floor(x),f=x-i,a=VIRID[i],b=VIRID[Math.min(i+1,4)]; return `rgb(${a[0]+(b[0]-a[0])*f|0},${a[1]+(b[1]-a[1])*f|0},${a[2]+(b[2]-a[2])*f|0})`; }
 function niceTicks(mn,mx,n){ const span=mx-mn; if(!(span>0)) return [mn];
   const raw=span/n, mag=Math.pow(10,Math.floor(Math.log10(raw))), r=raw/mag;
@@ -641,7 +642,7 @@ function drawOptPlot(){
     const txt=`${d.backlash.toFixed(2)}′ · ${d.stiff.toFixed(1)} N·m/′ · ${d.maxPA.toFixed(0)}°`;
     ctx.font='12px '+MONO; const tw=ctx.measureText(txt).width;
     const bxp=Math.min(Math.max(sx-tw/2-6,padL),w-padR-tw-12), byp= sy-32<padT? sy+12 : sy-32;
-    ctx.fillStyle='rgba(12,13,15,.92)'; ctx.strokeStyle=COL['line-2'];
+    ctx.fillStyle='rgba(13,26,48,.93)'; ctx.strokeStyle=COL['line-2'];
     ctx.beginPath(); ctx.roundRect(bxp,byp,tw+12,20,5); ctx.fill(); ctx.stroke();
     ctx.fillStyle=COL.ink; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText(txt,bxp+6,byp+10);
     ctx.textBaseline='alphabetic';
@@ -669,6 +670,7 @@ window.addEventListener('resize',()=>{ drawMesh(); drawTooth(); drawClearance();
 // wire every field label to its control (click-to-focus + accessible names) — ids already exist
 document.querySelectorAll('.field').forEach(f=>{ const inp=f.querySelector('select,input'), lab=f.querySelector('label'); if(inp&&lab&&inp.id) lab.htmlFor=inp.id; });
 applyGeometry();      // sets ROT_SIGN, PINS, BASE, meshProf via afterChange
+I('tb-date').textContent=new Date().toISOString().slice(0,10);
 applyLang('en');
 refreshExport();
 // honor OS reduced-motion: start paused on a static frame instead of auto-rotating
